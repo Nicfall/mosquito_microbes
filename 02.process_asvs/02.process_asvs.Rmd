@@ -1,0 +1,340 @@
+---
+title: "Mosquito revisions 2023"
+date: "2023-01-31"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+## Libraries, wd
+
+```{r}
+library("phyloseq")
+library(dplyr)
+library("ggplot2")
+library("cowplot")
+#BiocManager::install("decontam")
+library(decontam)
+
+setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
+```
+
+# Making phyloseq object (for first run-through)
+
+## Notes on ASV table generation
+
+Documentation is [here](https://metagenomics-pipelines.readthedocs.io/en/latest/pipeline_16S.html)
+
+"The subfolder main/ contains the pipeline data that is ready for further analysis, and includes:
+
+The abundance table: A (sample x OTU) abundance table (tsv formatted) with the .shared extension.
+The taxonomy table: A (OTU x 6 taxonomic tanks) table (tsv formatted) with the .taxonomy extension.
+The OTU sequences: A fasta formatted file with the representative sequences for each OTU."
+
+```{r}
+#abundance table
+seqtable <- read.csv("./counts_taxa_info/seqtable100_counts.csv",row.names=1)
+
+#taxa table
+taxtable <- read.csv("./counts_taxa_info/taxatable100.csv")
+row.names(taxtable) <- taxtable$OTU
+
+#metadata
+metadata <- read.csv("./counts_taxa_info/metadata_cleaned.csv")
+row.names(metadata) <- metadata$sample_name
+
+metadata2 <- metadata %>% 
+  mutate(newday=ifelse(
+    day<=12, "early",
+    ifelse(
+      day>12 & day<=20, "mid",
+      ifelse(
+        day>20,"late","NA"
+      ))))
+
+metadata2 %>%
+  subset(type=="A.albopictus") %>%
+  group_by(newday) %>%
+  dplyr::count()
+```
+
+## Make phyloseq object
+
+```{r}
+#make phyloseq object
+ps.all <- phyloseq(sample_data(metadata2),
+         otu_table(seqtable,taxa_are_rows = F),
+         tax_table(as.matrix(taxtable)))
+ps.all
+
+ps.all.no0 <- prune_taxa(taxa_sums(ps.all)>0,ps.all)
+ps.all.no0
+
+#saveRDS(ps.all.no0,file="ps.all.raw.100.rds")
+
+##number of ASVs before & after decontam:
+ps.raw <- readRDS("ps.all.raw.100.rds")
+ps.raw
+
+##the important ones for experiment analyses
+# ps.raw.less1 <- subset_samples(ps.raw,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
+# ps.raw.less <- prune_taxa(taxa_sums(ps.raw.less1)>0,ps.raw.less1)
+# ps.raw.less 
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1092 taxa and 412 samples ]
+# sample_data() Sample Data:       [ 412 samples by 23 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1092 taxa by 10 taxonomic ranks ]
+# #214 water samples
+# #197 mosquitos
+# #=411 total
+# + 1 RTP-I
+```
+
+## Removing contamination from negative controls
+
+```{r}
+df <- as.data.frame(sample_data(ps.all.no0)) # Put sample_data into a ggplot-friendly data.frame
+df$LibrarySize <- sample_sums(ps.all.no0)
+df <- df[order(df$LibrarySize),]
+df$Index <- seq(nrow(df))
+ggplot(data=df, aes(x=Index, y=LibrarySize, color=type)) + geom_point()
+
+sample_data(ps.all.no0)$lib_size <- sample_sums(ps.all.no0)
+sample_data(ps.all.no0)$is.neg <- sample_data(ps.all.no0)$type == "Neg_control"
+contamdf.prev <- isContaminant(ps.all.no0, neg="is.neg",threshold=0.5)
+table(contamdf.prev$contaminant)
+#sorry but we want CARN1
+contamdf.prev["Otu0022",]$contaminant <- FALSE
+table(contamdf.prev$contaminant)
+
+# Make phyloseq object of presence-absence in negative controls and true samples
+ps.pa <- transform_sample_counts(ps.all.no0, function(abund) 1*(abund>0))
+ps.pa.neg <- prune_samples(sample_data(ps.pa)$type == "Neg_control", ps.pa)
+ps.pa.pos <- prune_samples(sample_data(ps.pa)$type != "Neg_control", ps.pa)
+# Make data.frame of prevalence in positive and negative samples
+df.pa <- data.frame(pa.pos=taxa_sums(ps.pa.pos), pa.neg=taxa_sums(ps.pa.neg),
+                    contaminant=contamdf.prev$contaminant)
+ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
+  xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
+
+#remove from ps object:
+ps.clean1 <- prune_taxa(!contamdf.prev$contaminant,ps.all.no0)
+#also remove negative controls, don't need them anymore I think
+ps.cleaner <- subset_samples(ps.clean1,(type!="Neg_control"))
+ps.cleaner
+#any missing taxa left?
+ps.cleanest <- prune_taxa(taxa_sums(ps.cleaner)>0,ps.cleaner)
+ps.cleanest #1537 taxa, 440 samples
+
+sample_data(ps.cleanest)$lib_size_clean <- sample_sums(ps.cleanest)
+
+#saveRDS(ps.cleanest,file="ps.all.clean.100.rds")
+
+##just the mesocosm water & mosquite samples
+##post-cleaning
+ps.types <- subset_samples(ps.cleanest,type=="A.albopictus"|type=="Microbial Water")
+ps.types2 <- prune_taxa(taxa_sums(ps.types)>0,ps.types)
+ps.types2 #1025 taxa and 411 samples
+```
+
+# Cleaning phyloseq object further
+
+## Low read samples
+
+Note: not considering the infusion water or RTP-I samples here since not relevant for analysis
+
+```{r}
+ps.clean <- readRDS("ps.all.clean.100.rds")
+ps.clean
+
+ps.sub1 <- subset_samples(ps.clean,type=="A.albopictus"|type=="Microbial Water")
+ps.sub <- prune_taxa(taxa_sums(ps.sub1)>0,ps.sub1)
+ps.sub
+
+df <- data.frame(ps.sub@otu_table) # Put sample_data into a ggplot-friendly data.frame
+df$libsize <- rowSums(df)
+
+df2 <- df[order(df$libsize),]
+
+df2$Index <- seq(nrow(df2))
+##all of them:
+ggplot(data=df2, aes(x=Index, y=libsize))+
+  geom_point()
+
+head(df2$libsize) #jumps from 4k to 9.2k
+tail(df2$libsize) #1 crazy outlier
+#so the 'max' should be around 84550, excluding the higher outlier
+#~10% of that would be 8455... not far off from where I ended up [9200]
+
+# ##closer looks
+# ggplot(data=df2, aes(x=Index, y=libsize))+
+#   geom_point()+
+#   xlim(0,100)+
+#   ylim(5000,25000)
+
+##removing low read samples (<9,200):
+otu.sub <- data.frame(ps.sub@otu_table)
+
+total <- rowSums(otu.sub)
+fewer <- subset(total, total <9200)
+fewer
+
+ps.clean.less <- subset_samples(ps.clean,orgname!="M_D13_SG2.7"&orgname!="M_D13_OL1.5"&orgname!="M_D21_SW1.5"&orgname!="OL3.6_6"&orgname!="OL1.1_3")
+ps.clean.less
+
+##not using these ones for anything important sorry:
+ps.clean.less2 <- subset_samples(ps.clean.less,stage!="Dispersal")
+ps.clean.less2
+
+ps.clean.less.no0 <- prune_taxa(taxa_sums(ps.clean.less2)>0,ps.clean.less2)
+ps.clean.less.no0
+
+#saveRDS(ps.clean.less.no0,"ps.all.clean.100.less.rds")
+```
+
+## Remove singletons
+
+```{r}
+#setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
+ps.clean <- readRDS("ps.all.clean.100.less.rds")
+ps.clean #416 samples
+
+ps.clean.nosing <- filter_taxa(ps.clean, function (x) {sum(x > 0) > 1}, prune=TRUE)
+ps.clean.nosing #308 taxa total
+
+##low read trimming? 
+sum(sample_sums(ps.clean.nosing))
+#14735628 
+#~147 = 0.001% of total reads
+
+df <- data.frame(ps.clean.nosing@otu_table) # Put sample_data into aggplot-friendly data.frame
+df.t <- data.frame(t(df))
+df.t$asvsize <- rowSums(df.t)
+
+df.t2 <- df.t[order(df.t$asvsize),]
+
+df.t2$Index <- seq(nrow(df.t2))
+##all of them:
+ggplot(data=df.t2, aes(x=Index, y=asvsize))+
+  geom_point()
+
+head(df.t2$asvsize) 
+tail(df.t2$asvsize) #jumps an order of magnitude from 500k to 1.2m
+
+ps.trim <- prune_taxa(taxa_sums(ps.clean.nosing) >= 147, ps.clean.nosing)
+ps.trim #130 taxa
+
+#saveRDS(ps.trim,"ps.clean.trim.rds")
+ps.trim <- readRDS("ps.clean.trim.rds")
+
+##how many asvs per sample type
+ps.trim.mq1 <- subset_samples(ps.trim,type=="A.albopictus")
+ps.trim.mq <- prune_taxa(taxa_sums(ps.trim.mq1) > 0, ps.trim.mq1)
+ps.trim.mq #69 taxa
+
+ps.trim.mw1 <- subset_samples(ps.trim,type=="Microbial Water")
+ps.trim.mw <- prune_taxa(taxa_sums(ps.trim.mw1) > 0, ps.trim.mw1)
+ps.trim.mw #49 taxa
+
+ps.trim.stock1 <- subset_samples(ps.trim,type=="Reg spec pool")
+ps.trim.stock <- prune_taxa(taxa_sums(ps.trim.stock1) > 0, ps.trim.stock1)
+ps.trim.stock #27 taxa
+
+ps.trim.inf1 <- subset_samples(ps.trim,type=="Infusion water")
+ps.trim.inf <- prune_taxa(taxa_sums(ps.trim.inf1) > 0, ps.trim.inf1)
+ps.trim.inf #78 taxa
+
+##read count things
+#raw
+ps.raw <- readRDS("ps.all.raw.100.rds")
+ps.raw.exp <- subset_samples(ps.raw,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
+sum(sample_sums(ps.raw.exp))
+#14745529
+
+#pre-trimming
+ps.clean.exp <- subset_samples(ps.clean,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
+sum(sample_sums(ps.clean.exp))
+#14706903
+
+#post-trimming
+ps.trim.exp <- subset_samples(ps.trim,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
+sum(sample_sums(ps.trim.exp))
+#14685173
+```
+
+# Venn diagram of shared ASVs
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("Russel88/MicEco")
+library("MicEco")
+library("phyloseq")
+
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
+
+ps.trim <- readRDS("ps.clean.trim.rds")
+
+##all
+ps_venn(ps.trim,group="type")
+##where did the mosquitoes get those 16? 
+
+ps.trim.exp <- subset_samples(ps.trim,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
+ps.trim.exp
+
+ps_venn(ps.trim.exp,group="type",fill=c("darkgrey","grey","white"))
+
+ps.trim.water <- subset_samples(ps.trim,type=="Microbial Water"|type=="Infusion water"|type=="Reg spec pool")
+
+ps_venn(ps.trim.water,group="type")
+
+ps.trim.water <- subset_samples(ps.trim,type=="Microbial Water"|type=="Reg spec pool")
+ps.trim.water
+
+ps_venn(ps.trim.water,group="infusion")
+```
+
+# Rarefy
+
+Doesn't make sense to rarefy the infusion water sample or the RTP-I sample
+
+```{r}
+set.seed(2939)
+
+ps.trim.sub <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
+
+otu.trim.sub <- data.frame(ps.trim.sub@otu_table)
+
+total <- rowSums(otu.trim.sub)
+fewer <- subset(total, total <9200)
+fewer
+
+ps.trim.rare <- rarefy_even_depth(ps.trim.sub,sample.size=9200,replace=FALSE)
+# 1 otus were removed because they are no longer 
+# present in any sample after random subsampling
+
+#saveRDS(ps.trim.rare,"ps.clean.trim.rare9200.rds")
+```
+
+# Extracting raw reads numbers
+
+Taking place in directory that has all the raw fastq.gz files. First, gunzipping all the .fastq files (```gunzip *.fastq.gz```). Then running the following
+
+```
+for file in *.fastq
+do
+  echo $file
+	echo $file >> counts.txt
+	cat $file | wc -l >> counts.txt
+done
+```
+
+Copied text file contents to excel sheet "mosquito_raw_reads". Divided the reads by 4 because there's four lines of stuff per read. 
+

@@ -1,0 +1,393 @@
+---
+title: "Mosquito revisions 2023"
+date: "2023-01-31"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+## Libraries
+
+```{r}
+library("dplyr")
+#install.packages("lubridate")
+library("lubridate")
+library("ggplot2")
+library("cowplot")
+#install.packages("Rmisc")
+library("Rmisc")
+#install.packages("coxme")
+library("coxme")
+library("car")
+#install.packages("bbmle")
+library("bbmle")
+#install.packages("emmeans")
+library("emmeans")
+#install.packages("DHARMa")
+library("DHARMa")
+#install.packages("multcomp")
+library("multcomp")
+#install.packages("multcompView")
+library("multcompView")
+library("glmmTMB")
+```
+
+## Read in data
+
+```{r}
+setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/01.data_expdesign")
+
+##metadata
+##same file that goes into phyloseq
+metadata <- read.csv("../02.process_asvs/counts_taxa_info/metadata_cleaned.csv")
+row.names(metadata) <- metadata$sample_name
+
+metadata2 <- metadata %>% 
+  mutate(newday=ifelse(
+    day<=12, "early",
+    ifelse(
+      day>12 & day<=20, "mid",
+      ifelse(
+        day>20,"late","NA"
+      ))))
+
+metadata2 %>%
+  subset(type=="A.albopictus") %>%
+  group_by(newday) %>%
+  dplyr::count()
+```
+
+# Experimental info
+
+## Variable notes
+
+Abbreviations
+
+- **OL** = 'ohi'a lehua
+- **SG** = strawberry guava 
+- **SW** = sterile water
+
+Other variables
+
+- **Sample.ID** e.g. M_D13_OL1_1
+- **X16SCq** mostly NA, then some numbering around 220 [(Cq notes here)](https://bitesizebio.com/24581/what-is-a-ct-value/)
+- **OrgName** e.g. M_D13_OL1_1_S216_L001 (has sequencer info)
+- **totsum** - total read count pre-QC
+- **rspsum** - total read count for the 11 regional species pool
+- **Mesocosm** e.g. OL1.1
+- **Orgname** e.g. M_D13_OL1.1
+- **Type**
+  - A.albopictus
+  - Chemistry Water
+  - Dispersal Filtered
+  - Dispersal Unfiltered
+  - Microbial Water
+  - Reg spec pool
+- **Stage**
+  - Adult
+  - Culture
+  - Dispersal
+  - Infusion
+  - Water
+- **Special** - infusion notes
+
+# Date things & plot
+
+Dates: Aug. 15th - Sep 17th and 22nd, 2019
+
+## Setup things
+
+```{r}
+metadata2$date_cleaned <- mdy(metadata2$date.collected)
+
+##checking that experimental day & date line up:
+# ggplot(metadata2,aes(x=date_cleaned,y=day))+
+#  geom_point()
+
+meta.mq <- subset(metadata2,stage=="Adult")
+
+meta.mq$inf_temp <- paste0(meta.mq$infusion,"_",meta.mq$temperature)
+```
+
+## Experimental timeline plot (Fig. 1 panel)
+
+```{r}
+meta.mq$fake <- rep(30,nrow(meta.mq))
+#adding some fake points to get the shapes into the legend via geom_point
+
+meta.mq$temperature <- sub("C","Cool",meta.mq$temperature)
+meta.mq$temperature <- sub("H","Warm",meta.mq$temperature)
+
+##me being dumb & doing this for the 18th time
+
+#gsub(meta.mq$infusion)
+
+ggplot(meta.mq,aes(x=day,fill=inf_temp))+
+  geom_point(aes(shape=sex,y=fake))+
+  scale_shape_manual(values=c(21,23),name="Events",labels=c("Dispersal","Disp./water sample"))+
+  geom_histogram(position=position_dodge(),color="black")+
+  theme_cowplot()+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  #ggtitle("Time to emergence")+
+  xlab("Experimental day")+
+  ylab("Adults emerged")+
+  coord_cartesian(xlim = c(2,40))+
+  #ylim(-1,28)+
+  ylim(-1,19)+
+  #scale_alpha_manual(values=c(0.65,1),name="Thermal regime",labels=c("Cool","Warm"))+
+  annotate("point", x=c(2,6,8,10,14,16,18), y=c(rep(-1,7)), shape=21, size=1.5,fill="white")+
+  annotate("point", x=c(4,12,20), y=c(-1,-1,-1), shape=23, size=2,fill="white")+
+  facet_grid(temperature~.)+
+  theme(text=element_text(size=12),axis.text.x=element_text(size=12),axis.text.y=element_text(size=12))
+
+#ggsave(file="exp1_timelineNov23.pdf",height=3.25,width=5.25)
+```
+
+## Average time to emergence (Supp. fig)
+
+```{r}
+meta.mq.se <- summarySE(meta.mq,measurevar="day",groupvars=c("inf_temp","infusion"))
+
+ggplot(meta.mq,aes(x=infusion,y=day,fill=inf_temp,shape=inf_temp))+
+  geom_jitter(alpha=0.5,position=position_jitterdodge(jitter.width=0.3),color="gray")+
+  geom_errorbar(data=meta.mq.se,aes(ymax=day+se,ymin=day-se),width=0.2,color="black",position=position_dodge(width=0.6))+
+  geom_point(data=meta.mq.se,size=2.5,position=position_dodge(width=0.6))+
+  theme_cowplot()+
+  xlab("Infusion")+
+  ylab("Day of emergence")+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  scale_x_discrete(labels=c("OL","SG","PW"))
+#ggsave("plot.emerge.rate.pdf",width=5,height=3.5)
+```
+
+### Time to emergence stats
+
+```{r}
+##summary stats
+summarySE(meta.mq,measurevar="day",groupvars="infusion")
+summarySE(meta.mq,measurevar="day",groupvars=c("infusion","temperature"))
+
+##coxme
+meta.mq$emergence <- 1
+
+cox.all <- coxme(Surv(day, emergence)~infusion+temperature+dispersal+(1|mesocosm), data=meta.mq)
+summary(cox.all)
+Anova(cox.all)
+
+# Response: Surv(day, emergence)
+#             Df    Chisq Pr(>Chisq)    
+# infusion     2 100.6853    < 2e-16 ***
+# temperature  1  95.8436    < 2e-16 ***
+# dispersal    1   3.6092    0.05746 .  
+
+cox.all.int <- coxme(Surv(day, emergence)~infusion*temperature*dispersal+(1|mesocosm), data=meta.mq)
+Anova(cox.all.int)
+
+cox.all.int1 <- coxme(Surv(day, emergence)~infusion*temperature+dispersal+(1|mesocosm), data=meta.mq)
+
+cox.all.int2 <- coxme(Surv(day, emergence)~infusion+temperature*dispersal+(1|mesocosm), data=meta.mq)
+
+cox.all.int3 <- coxme(Surv(day, emergence)~infusion*dispersal+temperature+(1|mesocosm), data=meta.mq)
+
+AICtab(cox.all,cox.all.int,cox.all.int1,cox.all.int2,cox.all.int3)
+#cox.all best
+
+cox.all.em <- emmeans(cox.all,~infusion+temperature)
+multcomp::cld(cox.all.em)
+```
+
+## Step plot by date
+
+```{r}
+# surv.mq <-
+#   meta.mq %>%
+#   mutate(
+#     status = recode(stage, "Adult" = 1)
+#   )
+
+surv.mq2 <- meta.mq %>%
+  group_by(infusion,day) %>%
+  dplyr::summarize(num=n()) %>%
+  dplyr::mutate(count.inf=cumsum(num)) %>%
+  dplyr::mutate(prop=(count.inf/240)*100)
+
+surv.mq3 <- surv.mq2 %>%
+  as.data.frame() %>%
+  add_row(infusion="OL",day=0,num=0,count.inf=0,prop=0) %>%
+  add_row(infusion="SG",day=0,num=0,count.inf=0,prop=0) %>%
+  add_row(infusion="SW",day=0,num=0,count.inf=0,prop=0) %>%
+  add_row(infusion="OL",day=39,num=NA,count.inf=NA,prop=42.9166667) %>%
+  add_row(infusion="SG",day=39,num=NA,count.inf=NA,prop=18.7500000) %>%
+  add_row(infusion="SW",day=39,num=NA,count.inf=NA,prop=20.4166667)
+
+ggplot(surv.mq3,aes(x=day,y=prop,color=infusion))+
+  geom_step(linewidth=1)+
+  #xlim(0,39)+
+  theme_linedraw()+
+  xlab("Experimental day")+
+  ylab("Percent of larvae hatched")+
+  scale_color_manual(values=c("#7DBA54","#992559","#60eede"),name="Infusion")
+
+## survival plot stuff I didn't end up using
+# install.packages(c("survival", "lubridate", "ggsurvfit", "gtsummary", "tidycmprsk"))
+# remotes::install_github("zabore/condsurv")
+# remotes::install_github("zabore/ezfun")
+# library(gtsummary)
+# library(tidycmprsk)
+# library(condsurv)
+
+# library(survival)
+# #install.packages("ggsurvfit")
+# library(ggsurvfit)
+# 
+
+# 
+# Surv(surv.mq$day, surv.mq$status)[1:10]
+# s1 <- survfit(Surv(day,status) ~ 1, data = surv.mq)
+# str(s1)
+# 
+# survfit2(Surv(day,status) ~ 1, data = surv.mq) %>% 
+#   ggsurvfit() +
+#   labs(
+#     x = "Days",
+#     y = "Overall survival probability"
+#   )+ 
+#   add_confidence_interval()
+```
+
+## Emergence stats
+
+### Setup
+
+```{r}
+#subset mosquito adults from the data
+main.mq <- subset(metadata2, type=="A.albopictus")
+
+#summarize how many per mesocosm
+surv <- as.data.frame(summary(as.factor(main.mq$mesocosm)), optional=TRUE)
+##there should be 72 mesocosms here..
+surv$mesocosm <- rownames(surv)
+colnames(surv) <- c("count","mesocosm")
+
+##selecting mesocosm metadata
+meta.notspecial <- subset(metadata2,type=="Microbial Water")
+
+main.meso <- meta.notspecial %>%
+  dplyr::select(mesocosm, infusion, temperature, dispersal)
+##keeping only unique data
+main.meso.uniq <- unique(main.meso)
+##merging with survival data
+surv2 <- merge(surv,main.meso.uniq,by="mesocosm",all=T)
+surv2[is.na(surv2)] <- 0
+```
+
+### Success per mesocosm plot (Fig. 1 panel)
+
+```{r}
+surv2$inf.temp <- paste0(surv2$infusion,surv2$temperature)
+
+surv2$count10 <- (surv2$count)*10
+#meta.mq.se <- summarySE(meta.mq,measurevar="day",groupvars=c("inf_temp","infusion"))
+
+surv2.se <- summarySE(surv2,measurevar="count10",groupvars=c("inf.temp","infusion"))
+surv2.se
+
+ggplot(surv2.se,aes(x=infusion,y=count10,fill=inf.temp))+
+  geom_bar(stat="identity",position=position_dodge(),color="black")+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  theme_cowplot()+
+  geom_errorbar(aes(ymin=count10-se,ymax=count10+se,width=0.2),position=position_dodge(1))+
+  ylim(0,55)+
+  theme()+
+  ylab("% emerged/mesocosm")+
+  xlab("")+
+  scale_x_discrete(labels=c("OL","SG","PW"))
+  #geom_text(aes(label=round(count10)),vjust=-0.25,position=position_dodge(1))
+
+ggsave("gg.prop.pdf",width=4,height=2.5)
+```
+
+### Stats for success
+
+```{r}
+# mod.surv <- glmmTMB(cbind(count,10-count)~infusion+temperature+dispersal+(1|mesocosm), family=binomial(link="logit"), data=surv2)
+# mod.surv
+mod.surv <- glmmTMB(cbind(count,10-count)~infusion+temperature+dispersal+(1|mesocosm), family="binomial", data=surv2)
+#mod.surv
+
+mod.surv.int <- glmmTMB(cbind(count,10-count)~infusion*temperature*dispersal+(1|mesocosm), family="binomial", data=surv2)
+
+mod.surv.int1 <- glmmTMB(cbind(count,10-count)~infusion+temperature*dispersal+(1|mesocosm), family="binomial", data=surv2)
+
+mod.surv.int2 <- glmmTMB(cbind(count,10-count)~infusion*temperature+dispersal+(1|mesocosm), family="binomial", data=surv2)
+
+mod.surv.int3 <- glmmTMB(cbind(count,10-count)~infusion*dispersal+temperature+(1|mesocosm), family="binomial", data=surv2)
+
+AICtab(mod.surv,mod.surv.int,mod.surv.int1,mod.surv.int2,mod.surv.int3)
+#interaction better
+
+Anova(mod.surv.int2)
+
+mod.surv.int2.resid <- simulateResiduals(fittedModel = mod.surv.int2, plot = T)
+
+mod.surv.int2.em <- emmeans(mod.surv.int2,~infusion*temperature)
+multcomp::cld(mod.surv.int2.em)
+```
+
+# qPCR things
+
+## Setup
+
+```{r}
+meta.mq$wolb <- ((1/meta.mq$Wolb_ct1)+(1/meta.mq$Wolb_ct2))/(1/meta.mq$Act_ct)
+hist(meta.mq$wolb)
+
+ggplot(meta.mq,aes(x=infusion,y=wolb,color=temperature))+
+  geom_boxplot()+
+  facet_wrap(~sex)
+```
+
+## Stats
+
+```{r}
+#Wolbachia
+hist(meta.mq$wolb)
+hist(log(meta.mq$wolb))
+
+##full model
+wolb.full <- glmmTMB(log(wolb)~dispersal+newday+infusion+temperature+sex+(1|mesocosm), data=meta.mq)
+##no dispersal
+wolb.nodis <- glmmTMB(log(wolb)~newday+infusion+temperature+sex+(1|mesocosm), data=meta.mq)
+##no time
+wolb.noday <- glmmTMB(log(wolb)~dispersal+infusion+temperature+sex+(1|mesocosm), data=meta.mq)
+##no infusion
+wolb.noinf <- glmmTMB(log(wolb)~dispersal+newday+temperature+sex+(1|mesocosm), data=meta.mq)
+##no temperature
+wolb.notem <- glmmTMB(log(wolb)~dispersal+newday+infusion+sex+(1|mesocosm), data=meta.mq)
+##no sex
+wolb.nosex <- glmmTMB(log(wolb)~dispersal+newday+infusion+temperature+(1|mesocosm), data=meta.mq)
+
+AICtab(wolb.full,wolb.nodis,wolb.noday,wolb.noinf,wolb.notem,wolb.nosex)
+
+anova(wolb.full,wolb.nodis) #ns
+anova(wolb.full,wolb.noday) #ns
+anova(wolb.full,wolb.noinf) #ns
+anova(wolb.full,wolb.notem) #ns
+anova(wolb.full,wolb.nosex) #0.07 . 
+
+shapiro.test(residuals(wolb.full)) 
+qqnorm(residuals(wolb.full))
+qqline(residuals(wolb.full), col="red")
+
+wolb.full.resid <- simulateResiduals(fittedModel = wolb.full, plot = T)
+```
+
