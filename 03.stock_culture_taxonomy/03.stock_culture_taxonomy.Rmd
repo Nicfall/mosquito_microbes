@@ -1,0 +1,103 @@
+---
+title: "Stock culture taxonomy"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+```{r}
+library("phyloseq")
+library(pheatmap)
+library(RColorBrewer)
+library("ggpubr")
+
+setwd("~/Library/CloudStorage/GoogleDrive-nicolagk@hawaii.edu/My Drive/Mosquito_business/mosquito_microbes/03.stock_culture_taxonomy")
+```
+
+# Stock culture data
+
+```{r}
+##just the RTP-I sample
+ps.all <- readRDS("../02.process_asvs/ps.all.raw.100.rds")
+ps.all.stock <- subset_samples(ps.all,stage=="Culture")
+##remove 0s
+ps.all.stock.no0 <- prune_taxa(taxa_sums(ps.all.stock)>0,ps.all.stock)
+ps.all.stock.no0 #29 taxa, 1 sample
+
+##the RTP-I sample after cleaning things
+ps.clean <- readRDS("../02.process_asvs/ps.all.clean.trim.less.rds")
+ps.clean.stock <- subset_samples(ps.clean,stage=="Culture")
+ps.clean.stock.no0 <- prune_taxa(taxa_sums(ps.clean.stock)>0,ps.clean.stock)
+ps.clean.stock.no0 #28 taxa, 1 sample
+
+##otu tables from each of the above ps objects
+stock.tax.clean <- data.frame(ps.clean.stock.no0@tax_table)
+stock.tax.all <- data.frame(ps.all.stock.no0@tax_table)
+
+##which ones are not in the cleaned version
+stock.tax.all[!row.names(stock.tax.all) %in% row.names(stock.tax.clean),]
+#write.csv(stock.tax.all,file="stock.taxtable100.csv")
+
+##the weirdos
+#ps.pool.unclear <- subset_taxa(ps.clean.stock.no0,Pool_name=="Pool_Enterobacteria"|Pool_name=="Pool_Gammaproteobacteria"|Pool_name=="Mangrovibacter")
+```
+
+Extracting the OTUs that I want:
+
+```{r}
+otus100 <- c(row.names(stock.tax.all))
+#29 for OTUs at 100%
+
+##saving the otus I want as a .txt file to extract from the fasta file
+#write.table(otus100, file="otus100.txt", append = FALSE, sep = "/n", row.names = FALSE, col.names = FALSE,quote=FALSE)
+```
+
+```
+awk -F'>' 'NR==FNR{ids[$0]; next} NF>1{f=($2 in ids)} f' otus100.txt sequences_100.4.fasta >> stock.otu100.fasta
+
+##concatenating the sanger sequences with the ASVs sequences
+
+##convert csv file to fasta:
+awk -F , '{print ">"$1"\n"$2}' sanger_seqs.csv > sanger_seqs.fasta
+cat sanger_seqs.fasta stock.otu100.fasta >> stock.otu100_plussanger.fasta
+```
+
+Notes: Otus 1 and 4 are Wolbachia - taking those out. 
+
+Submitted to [phylogeny.fr](phylogeny.fr). Saved the .newick output
+
+# Plotting trees
+
+## Setup
+
+```{r}
+#library(tidyverse)
+#BiocManager::install("ggtree")
+library(ggtree)
+
+setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/03.stock_culture_taxonomy")
+
+tree <- read.tree("phylotree_stock_otus100.nwk.txt")
+tree
+```
+
+## Plotting
+
+```{r}
+ggtree(tree,layout="roundrect")+ #option for branch.length="none" which is cool
+  geom_treescale()+
+  geom_tiplab(color="tomato4")+
+  xlim(0,0.9)
+
+#ggsave("tree.all.pdf",height=8)
+```
+

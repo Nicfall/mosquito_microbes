@@ -1,6 +1,6 @@
 ---
-title: "Mosquito revisions 2023"
-date: "2023-01-31"
+title: "Process ASVs"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
  rmarkdown::html_document:
     theme: cerulean
@@ -24,12 +24,155 @@ library("cowplot")
 #BiocManager::install("decontam")
 library(decontam)
 
-setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/02.process_asvs")
 ```
 
 # Making phyloseq object (for first run-through)
 
-## Notes on ASV table generation
+## Taxonomy assignment
+
+UH pipeline already assigned taxonomy but it was a few years ago so going to just redo it now with the most recent taxonomy database just to check
+
+### Cleaning fasta file
+
+Way too much info in the raw files in the header of both 97 & 100 OTU clustering levels, plus some extra periods hyphens etc in the DNA sequence of 100 level, and extra line breaks in the 97 level... Couldn't figure out how to clean these up in R, found some code for unix (terminal) online.
+
+For OTU 100 level (done in counts_taxa_info folder)
+
+```
+cut -d"    " -f1 sequences_100_original.fasta > sequences_100.1.fasta
+##note: tab doesn't copy and paste well. To insert new tab: press control and v, then press Tab
+
+awk '!/^>/ { printf "%s", $0; n = "\n" }
+/^>/ { print n $0; n = "" }
+END { printf "%s", n }
+' sequences_100.1.fasta > sequences_100.2.fasta
+
+##removing hyphens and periods:
+sed 's/\-//g' sequences_100.2.fasta > sequences_100.3.fasta
+sed 's/\.//g' sequences_100.3.fasta > sequences_100.4.fasta
+```
+
+### Assign taxonomy
+
+Doing dada2's version on the cluster because it's slower than DECIPHER's version but I can't figure out if DECIPHER has an ID training set that is SILVA version 138.1
+
+```{bash, eval=F}
+srun -I30 -p sandbox -c 1 --mem=6g -t 60 --pty /bin/bash
+module load lang/R
+R
+
+##installing dada2:
+#Selected CRAN 67 [Michigan]
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("dada2")
+
+module avail lang/R/
+##get the full loaded name for next time 
+```
+
+SLURM job for taxonomy
+
+```
+#!/bin/bash
+#SBATCH --job-name=assign_tax
+#SBATCH --partition=shared
+##3 day max run time for public partitions, except 4 hour max runtime for the sandbox partition
+#SBATCH --time=0-24:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=20g
+#SBATCH --error=%A.err
+#SBATCH --output=%A.out ##%A = filled with job id
+
+module load lang/R/4.2.1-foss-2022a
+Rscript assign_tax60.R
+```
+
+Note: I have the fasta file but want to make it a .csv so I can read it in easily. There's a lovely resource here: https://cdcgov.github.io/CSV2FASTA/
+
+The text in the assign_tax.R script:
+
+```
+library("dada2")
+
+seqs <- read.csv("sequences_100.4.csv")
+seqtable <- read.csv("seqtable100_counts.csv",row.names=1)
+
+head(seqs$OTU==colnames(seqtable))
+tail(seqs$OTU==colnames(seqtable))
+
+colnames(seqtable) <- seqs$sequence
+
+taxa <- assignTaxonomy(as.matrix(seqtable), "silva_nr99_v138.1_wSpecies_train_set.fa.gz", tryRC=TRUE,verbose=TRUE,minBoot=60)
+
+saveRDS(taxa,file="taxa_v138.1_boot60.rds")
+```
+
+Back in R
+
+```{r}
+taxa.1 <- data.frame(readRDS("./counts_taxa_info/taxa_v138.1_boot60.rds"))
+seqs <- read.csv("./counts_taxa_info/sequences_100.4.csv")
+
+head(row.names(taxa.1)==seqs$sequence)
+tail(row.names(taxa.1)==seqs$sequence)
+
+taxa.1$sequence <- row.names(taxa.1)
+taxa.1$OTU <- seqs$OTU
+row.names(taxa.1) <- taxa.1$OTU
+```
+
+Add the unclassified business
+
+```{r rename ASVs, eval=F}
+library("stringr")
+
+tax <- taxa.1
+
+tax.clean <- data.frame(row.names = row.names(tax),
+                        Kingdom = str_replace(tax[,1], "D_0__",""),
+                        Phylum = str_replace(tax[,2], "D_1__",""),
+                        Class = str_replace(tax[,3], "D_2__",""),
+                        Order = str_replace(tax[,4], "D_3__",""),
+                        Family = str_replace(tax[,5], "D_4__",""),
+                        Genus = str_replace(tax[,6], "D_5__",""),
+                        Species = str_replace(tax[,7], "D_6__",""),
+                        stringsAsFactors = FALSE)
+tax.clean[is.na(tax.clean)] <- ""
+
+for (i in 1:7){ tax.clean[,i] <- as.character(tax.clean[,i])}
+####### Fill holes in the tax table
+tax.clean[is.na(tax.clean)] <- ""
+for (i in 1:nrow(tax.clean)){
+  if (tax.clean[i,2] == ""){
+    kingdom <- paste("Kingdom_", tax.clean[i,1], sep = "")
+    tax.clean[i, 2:7] <- kingdom
+  } else if (tax.clean[i,3] == ""){
+    phylum <- paste("Phylum_", tax.clean[i,2], sep = "")
+    tax.clean[i, 3:7] <- phylum
+  } else if (tax.clean[i,4] == ""){
+    class <- paste("Class_", tax.clean[i,3], sep = "")
+    tax.clean[i, 4:7] <- class
+  } else if (tax.clean[i,5] == ""){
+    order <- paste("Order_", tax.clean[i,4], sep = "")
+    tax.clean[i, 5:7] <- order
+  } else if (tax.clean[i,6] == ""){
+    family <- paste("Family_", tax.clean[i,5], sep = "")
+    tax.clean[i, 6:7] <- family
+  } else if (tax.clean[i,7] == ""){
+    tax.clean$Species[i] <- paste("Genus",tax.clean$Genus[i], sep = "_")
+  }
+}
+
+tax.clean[,8:9] <- taxa.1[,8:9]
+##checking merging the info back together went okay
+row.names(tax.clean)==tax.clean[,"OTU"]
+
+#write.csv(tax.clean,file="taxa_v138.1_boot60.csv")
+```
+
+## Notes on ASV table generation by UH pipeline
 
 Documentation is [here](https://metagenomics-pipelines.readthedocs.io/en/latest/pipeline_16S.html)
 
@@ -40,11 +183,13 @@ The taxonomy table: A (OTU x 6 taxonomic tanks) table (tsv formatted) with the .
 The OTU sequences: A fasta formatted file with the representative sequences for each OTU."
 
 ```{r}
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/02.process_asvs")
+
 #abundance table
 seqtable <- read.csv("./counts_taxa_info/seqtable100_counts.csv",row.names=1)
 
 #taxa table
-taxtable <- read.csv("./counts_taxa_info/taxatable100.csv")
+taxtable <- read.csv("./counts_taxa_info/taxa_v138.1_boot60_edits.csv",row.names=1)
 row.names(taxtable) <- taxtable$OTU
 
 #metadata
@@ -79,44 +224,41 @@ ps.all.no0 <- prune_taxa(taxa_sums(ps.all)>0,ps.all)
 ps.all.no0
 
 #saveRDS(ps.all.no0,file="ps.all.raw.100.rds")
+```
 
-##number of ASVs before & after decontam:
-ps.raw <- readRDS("ps.all.raw.100.rds")
-ps.raw
+## Remove singletons
 
-##the important ones for experiment analyses
-# ps.raw.less1 <- subset_samples(ps.raw,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
-# ps.raw.less <- prune_taxa(taxa_sums(ps.raw.less1)>0,ps.raw.less1)
-# ps.raw.less 
-# phyloseq-class experiment-level object
-# otu_table()   OTU Table:         [ 1092 taxa and 412 samples ]
-# sample_data() Sample Data:       [ 412 samples by 23 sample variables ]
-# tax_table()   Taxonomy Table:    [ 1092 taxa by 10 taxonomic ranks ]
-# #214 water samples
-# #197 mosquitos
-# #=411 total
-# + 1 RTP-I
+```{r}
+ps.all.nosing <- filter_taxa(ps.all.no0, function (x) {sum(x > 0) > 1}, prune=TRUE)
+ps.all.nosing #352 taxa total
+head(sort(sample_sums(ps.all.nosing)))
+
+ps.all.nosing.no0 <- prune_samples(sample_sums(ps.all.nosing)!=0,ps.all.nosing)
+ps.all.nosing.no0
+head(sort(taxa_sums(ps.all.nosing.no0))) #none are zeroes
 ```
 
 ## Removing contamination from negative controls
 
 ```{r}
-df <- as.data.frame(sample_data(ps.all.no0)) # Put sample_data into a ggplot-friendly data.frame
-df$LibrarySize <- sample_sums(ps.all.no0)
+df <- as.data.frame(sample_data(ps.all.nosing.no0)) # Put sample_data into a ggplot-friendly data.frame
+df$LibrarySize <- sample_sums(ps.all.nosing.no0)
 df <- df[order(df$LibrarySize),]
 df$Index <- seq(nrow(df))
 ggplot(data=df, aes(x=Index, y=LibrarySize, color=type)) + geom_point()
 
-sample_data(ps.all.no0)$lib_size <- sample_sums(ps.all.no0)
-sample_data(ps.all.no0)$is.neg <- sample_data(ps.all.no0)$type == "Neg_control"
-contamdf.prev <- isContaminant(ps.all.no0, neg="is.neg",threshold=0.5)
+sample_data(ps.all.nosing.no0)$lib_size <- sample_sums(ps.all.nosing.no0)
+sample_data(ps.all.nosing.no0)$is.neg <- sample_data(ps.all.nosing.no0)$type == "Neg_control"
+contamdf.prev <- isContaminant(ps.all.nosing.no0, neg="is.neg",threshold=0.5)
 table(contamdf.prev$contaminant)
 #sorry but we want CARN1
 contamdf.prev["Otu0022",]$contaminant <- FALSE
 table(contamdf.prev$contaminant)
+# FALSE  TRUE 
+#   356    69 
 
 # Make phyloseq object of presence-absence in negative controls and true samples
-ps.pa <- transform_sample_counts(ps.all.no0, function(abund) 1*(abund>0))
+ps.pa <- transform_sample_counts(ps.all.nosing.no0, function(abund) 1*(abund>0))
 ps.pa.neg <- prune_samples(sample_data(ps.pa)$type == "Neg_control", ps.pa)
 ps.pa.pos <- prune_samples(sample_data(ps.pa)$type != "Neg_control", ps.pa)
 # Make data.frame of prevalence in positive and negative samples
@@ -126,28 +268,33 @@ ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
   xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
 
 #remove from ps object:
-ps.clean1 <- prune_taxa(!contamdf.prev$contaminant,ps.all.no0)
+ps.clean1 <- prune_taxa(!contamdf.prev$contaminant,ps.all.nosing.no0)
 #also remove negative controls, don't need them anymore I think
-ps.cleaner <- subset_samples(ps.clean1,(type!="Neg_control"))
-ps.cleaner
+#ps.cleaner <- subset_samples(ps.clean1,(type!="Neg_control"))
+#ps.cleaner
 #any missing taxa left?
-ps.cleanest <- prune_taxa(taxa_sums(ps.cleaner)>0,ps.cleaner)
-ps.cleanest #1537 taxa, 440 samples
+ps.cleanest <- prune_taxa(taxa_sums(ps.clean1)>0,ps.clean1)
+ps.cleanest #356 taxa
 
-sample_data(ps.cleanest)$lib_size_clean <- sample_sums(ps.cleanest)
+tax.cleanest <- data.frame(ps.cleanest@tax_table)
+##some mitochondria got through
+ps.cleanest2 <- subset_taxa(ps.cleanest, (Family!="Mitochondria") | is.na(Family))
+ps.cleanest2 #352 taxa
 
-#saveRDS(ps.cleanest,file="ps.all.clean.100.rds")
+#sample_data(ps.cleanest)$lib_size_clean <- sample_sums(ps.cleanest)
+
+#saveRDS(ps.cleanest2,file="ps.all.clean.100.rds")
 
 ##just the mesocosm water & mosquite samples
 ##post-cleaning
-ps.types <- subset_samples(ps.cleanest,type=="A.albopictus"|type=="Microbial Water")
+ps.types <- subset_samples(ps.cleanest2,type=="A.albopictus"|type=="Microbial Water")
 ps.types2 <- prune_taxa(taxa_sums(ps.types)>0,ps.types)
-ps.types2 #1025 taxa and 411 samples
+ps.types2 #254 taxa and 410 samples
 ```
 
 # Cleaning phyloseq object further
 
-## Low read samples
+## Low read ASVs & samples
 
 Note: not considering the infusion water or RTP-I samples here since not relevant for analysis
 
@@ -155,9 +302,53 @@ Note: not considering the infusion water or RTP-I samples here since not relevan
 ps.clean <- readRDS("ps.all.clean.100.rds")
 ps.clean
 
-ps.sub1 <- subset_samples(ps.clean,type=="A.albopictus"|type=="Microbial Water")
+##low read ASVs
+sum(sample_sums(ps.clean))
+#15372419 
+15372419*0.00001
+#~153 = 0.001% of total reads
+
+df <- data.frame(ps.clean@otu_table) # Put sample_data into aggplot-friendly data.frame
+df.t <- data.frame(t(df))
+df.t$asvsize <- rowSums(df.t)
+
+df.t2 <- df.t[order(df.t$asvsize),]
+
+df.t2$Index <- seq(nrow(df.t2))
+##all of them:
+ggplot(data=df.t2, aes(x=Index, y=asvsize))+
+  geom_point()
+
+head(df.t2$asvsize) 
+tail(df.t2$asvsize) #jumps an order of magnitude from 500k to 1.2m
+
+ps.trim <- prune_taxa(taxa_sums(ps.clean) >= 153, ps.clean)
+ps.trim #161 taxa
+
+#saveRDS(ps.trim,"ps.clean.trim.rds")
+
+ps.trim.neg1 <- subset_samples(ps.trim,type=="Neg_control")
+ps.trim.neg <- prune_taxa(taxa_sums(ps.trim.neg1)>0,ps.trim.neg1)
+ps.trim.neg
+taxa_sums(ps.trim.neg)
+
+##after cleaning stuff
+ps.trim.pos1 <- subset_samples(ps.trim,type=="Pos_control")
+ps.trim.pos <- prune_taxa(taxa_sums(ps.trim.pos1)>0,ps.trim.pos1)
+ps.trim.pos
+otu_table(ps.trim.pos)
+
+##before
+ps.pos1 <- subset_samples(ps.all.no0,type=="Pos_control")
+ps.pos <- prune_taxa(taxa_sums(ps.pos1)>0,ps.pos1)
+ps.pos
+otu_table(ps.pos)
+tax_table(ps.pos)
+
+##low read samples
+ps.sub1 <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
 ps.sub <- prune_taxa(taxa_sums(ps.sub1)>0,ps.sub1)
-ps.sub
+ps.sub #103 taxa, 410 samples
 
 df <- data.frame(ps.sub@otu_table) # Put sample_data into a ggplot-friendly data.frame
 df$libsize <- rowSums(df)
@@ -171,8 +362,8 @@ ggplot(data=df2, aes(x=Index, y=libsize))+
 
 head(df2$libsize) #jumps from 4k to 9.2k
 tail(df2$libsize) #1 crazy outlier
-#so the 'max' should be around 84550, excluding the higher outlier
-#~10% of that would be 8455... not far off from where I ended up [9200]
+#so the 'max' should be around 82711, excluding the higher outlier
+#~10% of that would be 8271 not far off from where I ended up [9200]
 
 # ##closer looks
 # ggplot(data=df2, aes(x=Index, y=libsize))+
@@ -187,126 +378,54 @@ total <- rowSums(otu.sub)
 fewer <- subset(total, total <9200)
 fewer
 
-ps.clean.less <- subset_samples(ps.clean,orgname!="M_D13_SG2.7"&orgname!="M_D13_OL1.5"&orgname!="M_D21_SW1.5"&orgname!="OL3.6_6"&orgname!="OL1.1_3")
-ps.clean.less
+ps.trim.less <- subset_samples(ps.trim,orgname!="M_D13_SG2.7"&orgname!="M_D13_OL1.5"&orgname!="M_D21_SW1.5"&orgname!="OL3.6_6"&orgname!="OL1.1_3")
+ps.trim.less
 
-##not using these ones for anything important sorry:
-ps.clean.less2 <- subset_samples(ps.clean.less,stage!="Dispersal")
-ps.clean.less2
+ps.trim.less.no0 <- prune_taxa(taxa_sums(ps.trim.less)>0,ps.trim.less)
+ps.trim.less.no0 #161 taxa, 458 samples
 
-ps.clean.less.no0 <- prune_taxa(taxa_sums(ps.clean.less2)>0,ps.clean.less2)
-ps.clean.less.no0
-
-#saveRDS(ps.clean.less.no0,"ps.all.clean.100.less.rds")
+#saveRDS(ps.trim.less.no0,"ps.clean.trim.less.rds")
 ```
 
-## Remove singletons
+# Mean reads
 
 ```{r}
-#setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
-ps.clean <- readRDS("ps.all.clean.100.less.rds")
-ps.clean #416 samples
+ps.clean.trim <- readRDS("ps.clean.trim.less.rds")
+ps.clean.trim
 
-ps.clean.nosing <- filter_taxa(ps.clean, function (x) {sum(x > 0) > 1}, prune=TRUE)
-ps.clean.nosing #308 taxa total
+ps.mq <- subset_samples(ps.clean.trim,type=="A.albopictus")
+ps.mq.no0 <- prune_taxa(taxa_sums(ps.mq) > 0, ps.mq)
+ps.mq.no0 #89 taxa, 195 samples
 
-##low read trimming? 
-sum(sample_sums(ps.clean.nosing))
-#14735628 
-#~147 = 0.001% of total reads
+mean(sample_sums(ps.mq.no0))
+#45075.22
+sd(sample_sums(ps.mq.no0))
+#15244.51
 
-df <- data.frame(ps.clean.nosing@otu_table) # Put sample_data into aggplot-friendly data.frame
-df.t <- data.frame(t(df))
-df.t$asvsize <- rowSums(df.t)
+ps.mw <- subset_samples(ps.clean.trim,type=="Microbial Water")
+ps.mw.no0 <- prune_taxa(taxa_sums(ps.mw) > 0, ps.mw)
+ps.mw.no0 #49 taxa, 211 samples
 
-df.t2 <- df.t[order(df.t$asvsize),]
+mean(sample_sums(ps.mw.no0))
+#27778.78
+sd(sample_sums(ps.mw.no0))
+#12440.12
 
-df.t2$Index <- seq(nrow(df.t2))
-##all of them:
-ggplot(data=df.t2, aes(x=Index, y=asvsize))+
-  geom_point()
+ps.rtp <- subset_samples(ps.clean.trim,type=="Reg spec pool")
+ps.rtp.no0 <- prune_taxa(taxa_sums(ps.rtp) > 0, ps.rtp)
+ps.rtp.no0 #28 taxa
+ps.rtp.no0@otu_table
+ps.rtp.no0@tax_table
 
-head(df.t2$asvsize) 
-tail(df.t2$asvsize) #jumps an order of magnitude from 500k to 1.2m
-
-ps.trim <- prune_taxa(taxa_sums(ps.clean.nosing) >= 147, ps.clean.nosing)
-ps.trim #130 taxa
-
-#saveRDS(ps.trim,"ps.clean.trim.rds")
-ps.trim <- readRDS("ps.clean.trim.rds")
-
-##how many asvs per sample type
-ps.trim.mq1 <- subset_samples(ps.trim,type=="A.albopictus")
-ps.trim.mq <- prune_taxa(taxa_sums(ps.trim.mq1) > 0, ps.trim.mq1)
-ps.trim.mq #69 taxa
-
-ps.trim.mw1 <- subset_samples(ps.trim,type=="Microbial Water")
-ps.trim.mw <- prune_taxa(taxa_sums(ps.trim.mw1) > 0, ps.trim.mw1)
-ps.trim.mw #49 taxa
-
-ps.trim.stock1 <- subset_samples(ps.trim,type=="Reg spec pool")
-ps.trim.stock <- prune_taxa(taxa_sums(ps.trim.stock1) > 0, ps.trim.stock1)
-ps.trim.stock #27 taxa
-
-ps.trim.inf1 <- subset_samples(ps.trim,type=="Infusion water")
-ps.trim.inf <- prune_taxa(taxa_sums(ps.trim.inf1) > 0, ps.trim.inf1)
-ps.trim.inf #78 taxa
-
-##read count things
-#raw
-ps.raw <- readRDS("ps.all.raw.100.rds")
-ps.raw.exp <- subset_samples(ps.raw,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
-sum(sample_sums(ps.raw.exp))
-#14745529
-
-#pre-trimming
-ps.clean.exp <- subset_samples(ps.clean,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
-sum(sample_sums(ps.clean.exp))
-#14706903
-
-#post-trimming
-ps.trim.exp <- subset_samples(ps.trim,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
-sum(sample_sums(ps.trim.exp))
-#14685173
-```
-
-# Venn diagram of shared ASVs
-
-```{r}
-#install.packages("remotes")
-#remotes::install_github("Russel88/MicEco")
-library("MicEco")
-library("phyloseq")
-
-setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/02.process_asvs")
-
-ps.trim <- readRDS("ps.clean.trim.rds")
-
-##all
-ps_venn(ps.trim,group="type")
-##where did the mosquitoes get those 16? 
-
-ps.trim.exp <- subset_samples(ps.trim,type=="Microbial Water"|type=="A.albopictus"|type=="Reg spec pool")
-ps.trim.exp
-
-ps_venn(ps.trim.exp,group="type",fill=c("darkgrey","grey","white"))
-
-ps.trim.water <- subset_samples(ps.trim,type=="Microbial Water"|type=="Infusion water"|type=="Reg spec pool")
-
-ps_venn(ps.trim.water,group="type")
-
-ps.trim.water <- subset_samples(ps.trim,type=="Microbial Water"|type=="Reg spec pool")
-ps.trim.water
-
-ps_venn(ps.trim.water,group="infusion")
 ```
 
 # Rarefy
 
-Doesn't make sense to rarefy the infusion water sample or the RTP-I sample
-
 ```{r}
 set.seed(2939)
+
+ps.trim <- readRDS("ps.all.clean.trim.less.rds")
+ps.trim #161 taxa, 458 samples
 
 ps.trim.sub <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
 
@@ -317,7 +436,7 @@ fewer <- subset(total, total <9200)
 fewer
 
 ps.trim.rare <- rarefy_even_depth(ps.trim.sub,sample.size=9200,replace=FALSE)
-# 1 otus were removed because they are no longer 
+# 59 otus were removed because they are no longer 
 # present in any sample after random subsampling
 
 #saveRDS(ps.trim.rare,"ps.clean.trim.rare9200.rds")
