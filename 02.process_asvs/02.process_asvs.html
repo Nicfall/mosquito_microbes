@@ -1636,7 +1636,7 @@ set that is SILVA version 138.1</p>
 #SBATCH --output=%A.out ##%A = filled with job id
 
 module load lang/R/4.2.1-foss-2022a
-Rscript assign_tax.R</code></pre>
+Rscript assign_tax60.R</code></pre>
 <p>Note: I have the fasta file but want to make it a .csv so I can read
 it in easily. There’s a lovely resource here: <a href="https://cdcgov.github.io/CSV2FASTA/" class="uri">https://cdcgov.github.io/CSV2FASTA/</a></p>
 <p>The text in the assign_tax.R script:</p>
@@ -1650,9 +1650,9 @@ tail(seqs$OTU==colnames(seqtable))
 
 colnames(seqtable) &lt;- seqs$sequence
 
-taxa &lt;- assignTaxonomy(as.matrix(seqtable), &quot;silva_nr99_v138.1_wSpecies_train_s&gt;
+taxa &lt;- assignTaxonomy(as.matrix(seqtable), &quot;silva_nr99_v138.1_wSpecies_train_set.fa.gz&quot;, tryRC=TRUE,verbose=TRUE,minBoot=60)
 
-saveRDS(taxa,file=&quot;taxa_v138.1.rds&quot;)</code></pre>
+saveRDS(taxa,file=&quot;taxa_v138.1_boot60.rds&quot;)</code></pre>
 <p>Back in R</p>
 <div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>taxa<span class="fl">.1</span> <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="fu">readRDS</span>(<span class="st">&quot;./counts_taxa_info/taxa_v138.1_boot60.rds&quot;</span>))</span>
 <span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>seqs <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">&quot;./counts_taxa_info/sequences_100.4.csv&quot;</span>)</span>
@@ -1878,8 +1878,6 @@ object further</h1>
 <div id="low-read-asvs-samples" class="section level2" number="3.1">
 <h2><span class="header-section-number">3.1</span> Low read ASVs &amp;
 samples</h2>
-<p>Note: not considering the infusion water or RTP-I samples here since
-not relevant for analysis</p>
 <div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" tabindex="-1"></a>ps.clean <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;ps.all.clean.100.rds&quot;</span>)</span>
 <span id="cb50-2"><a href="#cb50-2" tabindex="-1"></a>ps.clean</span></code></pre></div>
 <pre><code>## phyloseq-class experiment-level object
@@ -1999,7 +1997,7 @@ not relevant for analysis</p>
 ## Otu0116 &quot;aeruginosa&quot;               
 ## Otu2139 &quot;Genus_Staphylococcus&quot;     
 ## Otu2593 &quot;Family_Lactobacillaceae&quot;  
-##         sequence                                                                                                                                                                                                                                                       
+##         Sequence                                                                                                                                                                                                                                                       
 ## Otu0001 &quot;TACGGAGAGGGCTAGCGTTATTCGGAATTATTGGGCGTAAAGGGCGCGTAGGCTGGTTAATAAGTTAAAAGTGAAATCCCGAGGCTTAACCTTGGAATTGCTTTTAAAACTATTAATCTAGAGATTGAAAGAGGATAGAGGAATTCCTGATGTAGAGGTAAAATTCGTAAATATTAGGAGGAACACCAGTGGCGAAGGCGTCTATCTGGTTCAAATCTGACGCTGAAGCGCGAAGGCGTGGGGAGCAAACAGG&quot;
 ## Otu0003 &quot;TACGAAGGGTGCAAGCGTTACTCGGAATTACTGGGCGTAAAGCGTGCGTAGGTGGTCGTTTAAGTCCGTTGTGAAAGCCCTGGGCTCAACCTGGGAACTGCAGTGGATACTGGGCGACTAGAGTGTGGTAGAGGGTAGCGGAATTCCTGGTGTAGCAGTGAAATGCGTAGAGATCAGGAGGAACATCCATGGCGAAGGCAGCTACCTGGACCAACACTGACACTGAGGCACGAAAGCGTGGGGAGCAAACAGG&quot;
 ## Otu0038 &quot;TACGGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCACGCAGGCGGTCTGTCAAGTCGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATTCGAAACTGGCAGGCTTGAGTCTCGTAGAGGGGGGTAGAATTCCAGGTGTAGCGGTGAAATGCGTAGAGATCTGGAGGAATACCGGTGGCGAAGGCGGCCCCCTGGACGAAGACTGACGCTCAGGTGCGAAAGCGTGGGGAGCAAACAGG&quot;
@@ -2013,24 +2011,26 @@ not relevant for analysis</p>
 ## Otu0116 &quot;TACGAAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCGCGTAGGTGGTTCAGCAAGTTGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATCCAAAACTACTGAGCTAGAGTACGGTAGAGGGTGGTGGAATTTCCTGTGTAGCGGTGAAATGCGTAGATATAGGAAGGAACACCAGTGGCGAAGGCGACCACCTGGACTGATACTGACACTGAGGTGCGAAAGCGTGGGGAGCAAACAGG&quot;
 ## Otu2139 &quot;TACGGAGGGTGCAAGCGTTAATCGGAATTATTGGGCGTAAAGCGCGCGTAGGCGGTTTTTTAAGTCTGATGTGAAAGCCCACGGCTCAACCGTGGAGGGTCATTGGAAACTGGAAAACTTGAGTGCAGAAGAGGAAAGTGGAATTCCATGTGTAGCGGTGAAATGCGCAGAGATATGGAGGAACACCAGTGGCGAAGGCGACTCTCTGGTCTGTAACTGACGCTGAGGAGCGAAAGCGTGGGGAGCGAACAGG&quot;
 ## Otu2593 &quot;TCCTTCTTTTTCCCTCTTTCTCCTTCTTTCTTTTTCTTCCCTCTCTTGCCTTCTTTTTTCTAAGTCTGATGTGAAAGCCTTCGGCTTAACCGGAGAAGTGCATCGGAAACTGGATAACTTGAGTGCAGAAGAGGGTAGTGGAACTCCATGTGTAGCGGTGGAATGCGTAGATATATGGAAGAACACCAGTGGCGAAGGCGGCTACCTGGTCTGCAACTGACGCTGAGACTCGAAAGCATGGGTAGCGAACAGG&quot;
-##         OTU       Pool_name     longer_name          
-## Otu0001 &quot;Otu0001&quot; &quot;wAlbB&quot;       &quot;Otu0001_wAlbB&quot;      
-## Otu0003 &quot;Otu0003&quot; &quot;STEN1&quot;       &quot;Otu0003_STEN1&quot;      
-## Otu0038 &quot;Otu0038&quot; &quot;Citrobacter&quot; &quot;Otu0038_Citrobacter&quot;
-## Otu0054 &quot;Otu0054&quot; &quot;&quot;            &quot;Otu0054&quot;            
-## Otu0061 &quot;Otu0061&quot; &quot;&quot;            &quot;Otu0061&quot;            
-## Otu0067 &quot;Otu0067&quot; &quot;&quot;            &quot;Otu0067&quot;            
-## Otu0074 &quot;Otu0074&quot; &quot;&quot;            &quot;Otu0074&quot;            
-## Otu0078 &quot;Otu0078&quot; &quot;&quot;            &quot;Otu0078&quot;            
-## Otu0091 &quot;Otu0091&quot; &quot;&quot;            &quot;Otu0091&quot;            
-## Otu0104 &quot;Otu0104&quot; &quot;&quot;            &quot;Otu0104&quot;            
-## Otu0116 &quot;Otu0116&quot; &quot;&quot;            &quot;Otu0116&quot;            
-## Otu2139 &quot;Otu2139&quot; &quot;&quot;            &quot;Otu2139&quot;            
-## Otu2593 &quot;Otu2593&quot; &quot;&quot;            &quot;Otu2593&quot;</code></pre>
+##         OTU       Pool_name Longer_name    
+## Otu0001 &quot;Otu0001&quot; &quot;&quot;        &quot;&quot;             
+## Otu0003 &quot;Otu0003&quot; &quot;STEN1&quot;   &quot;Otu0003_STEN1&quot;
+## Otu0038 &quot;Otu0038&quot; &quot;&quot;        &quot;&quot;             
+## Otu0054 &quot;Otu0054&quot; &quot;&quot;        &quot;&quot;             
+## Otu0061 &quot;Otu0061&quot; &quot;&quot;        &quot;&quot;             
+## Otu0067 &quot;Otu0067&quot; &quot;&quot;        &quot;&quot;             
+## Otu0074 &quot;Otu0074&quot; &quot;&quot;        &quot;&quot;             
+## Otu0078 &quot;Otu0078&quot; &quot;&quot;        &quot;&quot;             
+## Otu0091 &quot;Otu0091&quot; &quot;&quot;        &quot;&quot;             
+## Otu0104 &quot;Otu0104&quot; &quot;&quot;        &quot;&quot;             
+## Otu0116 &quot;Otu0116&quot; &quot;&quot;        &quot;&quot;             
+## Otu2139 &quot;Otu2139&quot; &quot;&quot;        &quot;&quot;             
+## Otu2593 &quot;Otu2593&quot; &quot;&quot;        &quot;&quot;</code></pre>
 <div class="sourceCode" id="cb77"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb77-1"><a href="#cb77-1" tabindex="-1"></a><span class="do">##low read samples</span></span>
-<span id="cb77-2"><a href="#cb77-2" tabindex="-1"></a>ps.sub1 <span class="ot">&lt;-</span> <span class="fu">subset_samples</span>(ps.trim,type<span class="sc">==</span><span class="st">&quot;A.albopictus&quot;</span><span class="sc">|</span>type<span class="sc">==</span><span class="st">&quot;Microbial Water&quot;</span>)</span>
-<span id="cb77-3"><a href="#cb77-3" tabindex="-1"></a>ps.sub <span class="ot">&lt;-</span> <span class="fu">prune_taxa</span>(<span class="fu">taxa_sums</span>(ps.sub1)<span class="sc">&gt;</span><span class="dv">0</span>,ps.sub1)</span>
-<span id="cb77-4"><a href="#cb77-4" tabindex="-1"></a>ps.sub <span class="co">#103 taxa, 410 samples</span></span></code></pre></div>
+<span id="cb77-2"><a href="#cb77-2" tabindex="-1"></a><span class="co">#Note: not considering the infusion water or RTP-I samples here since not relevant for analysis</span></span>
+<span id="cb77-3"><a href="#cb77-3" tabindex="-1"></a></span>
+<span id="cb77-4"><a href="#cb77-4" tabindex="-1"></a>ps.sub1 <span class="ot">&lt;-</span> <span class="fu">subset_samples</span>(ps.trim,type<span class="sc">==</span><span class="st">&quot;A.albopictus&quot;</span><span class="sc">|</span>type<span class="sc">==</span><span class="st">&quot;Microbial Water&quot;</span>)</span>
+<span id="cb77-5"><a href="#cb77-5" tabindex="-1"></a>ps.sub <span class="ot">&lt;-</span> <span class="fu">prune_taxa</span>(<span class="fu">taxa_sums</span>(ps.sub1)<span class="sc">&gt;</span><span class="dv">0</span>,ps.sub1)</span>
+<span id="cb77-6"><a href="#cb77-6" tabindex="-1"></a>ps.sub <span class="co">#103 taxa, 410 samples</span></span></code></pre></div>
 <pre><code>## phyloseq-class experiment-level object
 ## otu_table()   OTU Table:         [ 103 taxa and 410 samples ]
 ## sample_data() Sample Data:       [ 410 samples by 24 sample variables ]
@@ -2080,12 +2080,12 @@ not relevant for analysis</p>
 ## otu_table()   OTU Table:         [ 161 taxa and 458 samples ]
 ## sample_data() Sample Data:       [ 458 samples by 24 sample variables ]
 ## tax_table()   Taxonomy Table:    [ 161 taxa by 11 taxonomic ranks ]</code></pre>
-<div class="sourceCode" id="cb90"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb90-1"><a href="#cb90-1" tabindex="-1"></a><span class="co">#saveRDS(ps.trim.less.no0,&quot;ps.all.clean.trim.less.rds&quot;)</span></span></code></pre></div>
+<div class="sourceCode" id="cb90"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb90-1"><a href="#cb90-1" tabindex="-1"></a><span class="co">#saveRDS(ps.trim.less.no0,&quot;ps.clean.trim.less.rds&quot;)</span></span></code></pre></div>
 </div>
 </div>
 <div id="mean-reads" class="section level1" number="4">
 <h1><span class="header-section-number">4</span> Mean reads</h1>
-<div class="sourceCode" id="cb91"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb91-1"><a href="#cb91-1" tabindex="-1"></a>ps.clean.trim <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;ps.all.clean.trim.less.rds&quot;</span>)</span>
+<div class="sourceCode" id="cb91"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb91-1"><a href="#cb91-1" tabindex="-1"></a>ps.clean.trim <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;ps.clean.trim.less.rds&quot;</span>)</span>
 <span id="cb91-2"><a href="#cb91-2" tabindex="-1"></a>ps.clean.trim</span></code></pre></div>
 <pre><code>## phyloseq-class experiment-level object
 ## otu_table()   OTU Table:         [ 161 taxa and 458 samples ]
@@ -2228,7 +2228,7 @@ not relevant for analysis</p>
 ## Otu0162 &quot;mirabilis&quot;                
 ## Otu0205 &quot;Family_Erwiniaceae&quot;       
 ## Otu0322 &quot;Genus_Thermomonas&quot;        
-##         sequence                                                                                                                                                                                                                                                       
+##         Sequence                                                                                                                                                                                                                                                       
 ## Otu0001 &quot;TACGGAGAGGGCTAGCGTTATTCGGAATTATTGGGCGTAAAGGGCGCGTAGGCTGGTTAATAAGTTAAAAGTGAAATCCCGAGGCTTAACCTTGGAATTGCTTTTAAAACTATTAATCTAGAGATTGAAAGAGGATAGAGGAATTCCTGATGTAGAGGTAAAATTCGTAAATATTAGGAGGAACACCAGTGGCGAAGGCGTCTATCTGGTTCAAATCTGACGCTGAAGCGCGAAGGCGTGGGGAGCAAACAGG&quot;
 ## Otu0002 &quot;TACGGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCACGCAGGCGGTCTGTCAAGTCGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATTCGAAACTGGCAGGCTGGAGTCTCGTAGAGGGAGGTAGAATTCCAGGTGTAGCGGTGAAATGCGTAGAGATCTGGAGGAATACCGGTGGCGAAGGCGGCCTCCTGGACGAAGACTGACGCTCAGGTGCGAAAGCGTGGGGAGCAAACAGG&quot;
 ## Otu0003 &quot;TACGAAGGGTGCAAGCGTTACTCGGAATTACTGGGCGTAAAGCGTGCGTAGGTGGTCGTTTAAGTCCGTTGTGAAAGCCCTGGGCTCAACCTGGGAACTGCAGTGGATACTGGGCGACTAGAGTGTGGTAGAGGGTAGCGGAATTCCTGGTGTAGCAGTGAAATGCGTAGAGATCAGGAGGAACATCCATGGCGAAGGCAGCTACCTGGACCAACACTGACACTGAGGCACGAAAGCGTGGGGAGCAAACAGG&quot;
@@ -2257,70 +2257,41 @@ not relevant for analysis</p>
 ## Otu0162 &quot;TACGGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCACGCAGGCGGTCAATTAAGTCAGATGTGAAAGCCCCGAGCTTAACTTGGGAATTGCATCTGAAACTGGTTGGCTAGAGTCTTGTAGAGGGGGGTAGAATTCCATGTGTAGCGGTGAAATGCGTAGAGATGTGGAGGAATACCGGTGGCGAAGGCGGCCCCCTGGACAAAGACTGACGCTCAGGTGCGAAAGCGTGGGGAGCAAACAGG&quot;
 ## Otu0205 &quot;TACGGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCACGCAGGCGGTCTGTTAAGTCAGATGTGAAATCCCCGGGCTTAACCTGGGAACTGCATTTGAAACTGGCAGGCTAGAGTCTTGTAGAGGGGGGTAGAATTCCAGGTGTAGCGGTGAAATGCGTAGAGATCTGGAGGAATACCGGTGGCGAAGGCGGCCCCCTGGACAAAGACTGACGCTCAGGTGCGAAAGCGTGGGGAGCAAACAGG&quot;
 ## Otu0322 &quot;TACGAAGGGTGCAAGCGTTACTCGGAATTACTGGGCGTAAAGCGTGCGTAGGTGGTTTGTTAAGTCTGATGTGAAAGCCCTGGGCTCAACCTGGGAATTGCATTGGATACTGGCAGGCTAGAGTGCGGTAGAGGGTAGTGGAATTCCCGGTGTAGCAGTGAAATGCGTAGAGATCGGGAGGAACATCCGTGGCGAAGGCGACTACCTGGACCAGCACTGACACTGAGGCACGAAAGCGTGGGGAGCAAACAGG&quot;
-##         OTU       Pool_name                  
-## Otu0001 &quot;Otu0001&quot; &quot;wAlbB&quot;                    
-## Otu0002 &quot;Otu0002&quot; &quot;KOSA1&quot;                    
-## Otu0003 &quot;Otu0003&quot; &quot;STEN1&quot;                    
-## Otu0004 &quot;Otu0004&quot; &quot;wAlbA&quot;                    
-## Otu0005 &quot;Otu0005&quot; &quot;CHRY1&quot;                    
-## Otu0006 &quot;Otu0006&quot; &quot;ENTE1/2&quot;                  
-## Otu0007 &quot;Otu0007&quot; &quot;ASAI1/2&quot;                  
-## Otu0008 &quot;Otu0008&quot; &quot;KOSA2&quot;                    
-## Otu0009 &quot;Otu0009&quot; &quot;KLEB1&quot;                    
-## Otu0010 &quot;Otu0010&quot; &quot;PSEU2&quot;                    
-## Otu0014 &quot;Otu0014&quot; &quot;PANT1/2/3&quot;                
-## Otu0016 &quot;Otu0016&quot; &quot;Family_Enterobacteriaceae&quot;
-## Otu0020 &quot;Otu0020&quot; &quot;STEN2&quot;                    
-## Otu0021 &quot;Otu0021&quot; &quot;PANT4&quot;                    
-## Otu0022 &quot;Otu0022&quot; &quot;CARN1&quot;                    
-## Otu0024 &quot;Otu0024&quot; &quot;ASAI3&quot;                    
-## Otu0036 &quot;Otu0036&quot; &quot;Stenotrophomonas&quot;         
-## Otu0038 &quot;Otu0038&quot; &quot;Citrobacter&quot;              
-## Otu0053 &quot;Otu0053&quot; &quot;PSEU1/3&quot;                  
-## Otu0056 &quot;Otu0056&quot; &quot;Kosakonia&quot;                
-## Otu0058 &quot;Otu0058&quot; &quot;BACI1&quot;                    
-## Otu0070 &quot;Otu0070&quot; &quot;Order_Enterobacterales&quot;   
-## Otu0079 &quot;Otu0079&quot; &quot;Genus_Pantoea&quot;            
-## Otu0080 &quot;Otu0080&quot; &quot;Genus_Pantoea&quot;            
-## Otu0092 &quot;Otu0092&quot; &quot;Family_Enterobacteriaceae&quot;
-## Otu0162 &quot;Otu0162&quot; &quot;PROT1&quot;                    
-## Otu0205 &quot;Otu0205&quot; &quot;Family_Erwiniaceae&quot;       
-## Otu0322 &quot;Otu0322&quot; &quot;THER1&quot;                    
-##         longer_name                        
-## Otu0001 &quot;Otu0001_wAlbB&quot;                    
-## Otu0002 &quot;Otu0002_KOSA1&quot;                    
-## Otu0003 &quot;Otu0003_STEN1&quot;                    
-## Otu0004 &quot;Otu0004_wAlbA&quot;                    
-## Otu0005 &quot;Otu0005_CHRY1&quot;                    
-## Otu0006 &quot;Otu0006_ENTE1/2&quot;                  
-## Otu0007 &quot;Otu0007_ASAI1/2&quot;                  
-## Otu0008 &quot;Otu0008_KOSA2&quot;                    
-## Otu0009 &quot;Otu0009_KLEB1&quot;                    
-## Otu0010 &quot;Otu0010_PSEU2&quot;                    
-## Otu0014 &quot;Otu0014_PANT1/2/3&quot;                
-## Otu0016 &quot;Otu0016_Family_Enterobacteriaceae&quot;
-## Otu0020 &quot;Otu0020_STEN2&quot;                    
-## Otu0021 &quot;Otu0021_PANT4&quot;                    
-## Otu0022 &quot;Otu0022_CARN1&quot;                    
-## Otu0024 &quot;Otu0024_ASAI3&quot;                    
-## Otu0036 &quot;Otu0036_Stenotrophomonas&quot;         
-## Otu0038 &quot;Otu0038_Citrobacter&quot;              
-## Otu0053 &quot;Otu0053_PSEU1/3&quot;                  
-## Otu0056 &quot;Otu0056_Kosakonia&quot;                
-## Otu0058 &quot;Otu0058_BACI1&quot;                    
-## Otu0070 &quot;Otu0070_Order_Enterobacterales&quot;   
-## Otu0079 &quot;Otu0079_Genus_Pantoea&quot;            
-## Otu0080 &quot;Otu0080_Genus_Pantoea&quot;            
-## Otu0092 &quot;Otu0092_Family_Enterobacteriaceae&quot;
-## Otu0162 &quot;Otu0162_PROT1&quot;                    
-## Otu0205 &quot;Otu0205_Family_Erwiniaceae&quot;       
-## Otu0322 &quot;Otu0322_THER1&quot;</code></pre>
+##         OTU       Pool_name   Longer_name        
+## Otu0001 &quot;Otu0001&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0002 &quot;Otu0002&quot; &quot;KOSA1&quot;     &quot;Otu0002_KOSA1&quot;    
+## Otu0003 &quot;Otu0003&quot; &quot;STEN1&quot;     &quot;Otu0003_STEN1&quot;    
+## Otu0004 &quot;Otu0004&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0005 &quot;Otu0005&quot; &quot;CHRY1&quot;     &quot;Otu0005_CHRY1&quot;    
+## Otu0006 &quot;Otu0006&quot; &quot;ENTE1/2&quot;   &quot;Otu0006_ENTE1/2&quot;  
+## Otu0007 &quot;Otu0007&quot; &quot;ASAI1/2&quot;   &quot;Otu0007_ASAI1/2&quot;  
+## Otu0008 &quot;Otu0008&quot; &quot;KOSA2&quot;     &quot;Otu0008_KOSA2&quot;    
+## Otu0009 &quot;Otu0009&quot; &quot;KLEB1&quot;     &quot;Otu0009_KLEB1&quot;    
+## Otu0010 &quot;Otu0010&quot; &quot;PSEU2&quot;     &quot;Otu0010_PSEU2&quot;    
+## Otu0014 &quot;Otu0014&quot; &quot;PANT1/2/3&quot; &quot;Otu0014_PANT1/2/3&quot;
+## Otu0016 &quot;Otu0016&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0020 &quot;Otu0020&quot; &quot;STEN2&quot;     &quot;Otu0020_STEN2&quot;    
+## Otu0021 &quot;Otu0021&quot; &quot;PANT4&quot;     &quot;Otu0021_PANT4&quot;    
+## Otu0022 &quot;Otu0022&quot; &quot;CARN1&quot;     &quot;Otu0022_CARN1&quot;    
+## Otu0024 &quot;Otu0024&quot; &quot;ASAI3&quot;     &quot;Otu0024_ASAI3&quot;    
+## Otu0036 &quot;Otu0036&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0038 &quot;Otu0038&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0053 &quot;Otu0053&quot; &quot;PSEU1/3&quot;   &quot;Otu0053_PSEU1/3&quot;  
+## Otu0056 &quot;Otu0056&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0058 &quot;Otu0058&quot; &quot;BACI1&quot;     &quot;Otu0058_BACI1&quot;    
+## Otu0070 &quot;Otu0070&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0079 &quot;Otu0079&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0080 &quot;Otu0080&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0092 &quot;Otu0092&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0162 &quot;Otu0162&quot; &quot;PROT1&quot;     &quot;Otu0162_PROT1&quot;    
+## Otu0205 &quot;Otu0205&quot; &quot;&quot;          &quot;&quot;                 
+## Otu0322 &quot;Otu0322&quot; &quot;XANT1&quot;     &quot;Otu0322_XANT1&quot;</code></pre>
 </div>
 <div id="rarefy" class="section level1" number="5">
 <h1><span class="header-section-number">5</span> Rarefy</h1>
 <div class="sourceCode" id="cb111"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb111-1"><a href="#cb111-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2939</span>)</span>
 <span id="cb111-2"><a href="#cb111-2" tabindex="-1"></a></span>
-<span id="cb111-3"><a href="#cb111-3" tabindex="-1"></a>ps.trim <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;ps.all.clean.trim.less.rds&quot;</span>)</span>
+<span id="cb111-3"><a href="#cb111-3" tabindex="-1"></a>ps.trim <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;ps.clean.trim.less.rds&quot;</span>)</span>
 <span id="cb111-4"><a href="#cb111-4" tabindex="-1"></a>ps.trim <span class="co">#161 taxa, 458 samples</span></span></code></pre></div>
 <pre><code>## phyloseq-class experiment-level object
 ## otu_table()   OTU Table:         [ 161 taxa and 458 samples ]
@@ -2342,10 +2313,15 @@ not relevant for analysis</p>
 <pre><code>## 59OTUs were removed because they are no longer 
 ## present in any sample after random subsampling</code></pre>
 <pre><code>## ...</code></pre>
-<div class="sourceCode" id="cb120"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb120-1"><a href="#cb120-1" tabindex="-1"></a><span class="co"># 59 otus were removed because they are no longer </span></span>
-<span id="cb120-2"><a href="#cb120-2" tabindex="-1"></a><span class="co"># present in any sample after random subsampling</span></span>
-<span id="cb120-3"><a href="#cb120-3" tabindex="-1"></a></span>
-<span id="cb120-4"><a href="#cb120-4" tabindex="-1"></a><span class="co">#saveRDS(ps.trim.rare,&quot;ps.clean.trim.rare9200.rds&quot;)</span></span></code></pre></div>
+<div class="sourceCode" id="cb120"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb120-1"><a href="#cb120-1" tabindex="-1"></a>ps.trim.rare</span></code></pre></div>
+<pre><code>## phyloseq-class experiment-level object
+## otu_table()   OTU Table:         [ 102 taxa and 406 samples ]
+## sample_data() Sample Data:       [ 406 samples by 24 sample variables ]
+## tax_table()   Taxonomy Table:    [ 102 taxa by 11 taxonomic ranks ]</code></pre>
+<div class="sourceCode" id="cb122"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb122-1"><a href="#cb122-1" tabindex="-1"></a><span class="co"># 59 otus were removed because they are no longer </span></span>
+<span id="cb122-2"><a href="#cb122-2" tabindex="-1"></a><span class="co"># present in any sample after random subsampling</span></span>
+<span id="cb122-3"><a href="#cb122-3" tabindex="-1"></a></span>
+<span id="cb122-4"><a href="#cb122-4" tabindex="-1"></a><span class="co">#saveRDS(ps.trim.rare,&quot;ps.clean.trim.rare9200.rds&quot;)</span></span></code></pre></div>
 </div>
 <div id="extracting-raw-reads-numbers" class="section level1" number="6">
 <h1><span class="header-section-number">6</span> Extracting raw reads

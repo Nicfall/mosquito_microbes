@@ -296,8 +296,6 @@ ps.types2 #254 taxa and 410 samples
 
 ## Low read ASVs & samples
 
-Note: not considering the infusion water or RTP-I samples here since not relevant for analysis
-
 ```{r}
 ps.clean <- readRDS("ps.all.clean.100.rds")
 ps.clean
@@ -346,6 +344,8 @@ otu_table(ps.pos)
 tax_table(ps.pos)
 
 ##low read samples
+#Note: not considering the infusion water or RTP-I samples here since not relevant for analysis
+
 ps.sub1 <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
 ps.sub <- prune_taxa(taxa_sums(ps.sub1)>0,ps.sub1)
 ps.sub #103 taxa, 410 samples
@@ -424,7 +424,7 @@ ps.rtp.no0@tax_table
 ```{r}
 set.seed(2939)
 
-ps.trim <- readRDS("ps.all.clean.trim.less.rds")
+ps.trim <- readRDS("ps.clean.trim.less.rds")
 ps.trim #161 taxa, 458 samples
 
 ps.trim.sub <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
@@ -436,6 +436,7 @@ fewer <- subset(total, total <9200)
 fewer
 
 ps.trim.rare <- rarefy_even_depth(ps.trim.sub,sample.size=9200,replace=FALSE)
+ps.trim.rare
 # 59 otus were removed because they are no longer 
 # present in any sample after random subsampling
 
