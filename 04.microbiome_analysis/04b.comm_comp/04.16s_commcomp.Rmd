@@ -1,0 +1,944 @@
+---
+title: "Exp I - microbiome community composition"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+## Libs
+
+```{r}
+library("vegan")
+library("phyloseq")
+library("ggplot2")
+library("cowplot")
+#install.packages("colorBlindness")
+library("colorBlindness")
+#BiocManager::install("microbiome")
+library("microbiome")
+library("dplyr")
+#install.packages("microViz", repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos")))
+library(microViz)
+library("ggpubr")
+library('tidyverse')
+library("microshades")
+
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04b.comm_comp")
+```
+
+## Data
+
+```{r}
+ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+ps.clean #161 taxa, 458 samples
+
+ps.mq1 <- subset_samples(ps.clean,type=="A.albopictus")
+ps.mq <- prune_taxa(taxa_sums(ps.mq1) > 0, ps.mq1)
+ps.mq
+
+ps.mw1 <- subset_samples(ps.clean,type=="Microbial Water")
+ps.mw <- prune_taxa(taxa_sums(ps.mw1) > 0, ps.mw1)
+ps.mw
+
+##datasets but trimmed for mixed model things
+ps.trim.mq <- readRDS("../04c.mixed_models/ps.trim.mq.rds")
+ps.trim.mq #29 taxa, 195 samples
+
+ps.trim.mw <- readRDS("../04c.mixed_models/ps.trim.mw.rds")
+ps.trim.mw #39 taxa, 211 samples
+```
+
+# PCOA
+
+## All samples 
+
+By 'all' here I really mean without separating the two experimental types (mosquitoes & mesocosm water)
+
+### Relative abundance & Bray
+
+```{r}
+ps.clean.rel <- transform_sample_counts(ps.clean, function(x) x / sum(x))
+ps.clean.rel
+ps.all.rel1 <- subset_samples(ps.clean.rel,type=="A.albopictus"|type=="Microbial Water")
+ps.all.rel1
+ps.all.rel <- prune_taxa(taxa_sums(ps.all.rel1) > 0, ps.all.rel1)
+ps.all.rel #103 taxa, 406 samples
+
+ord.all.rel <- ordinate(ps.all.rel, "PCoA", "bray")
+
+plot.all.rel <- plot_ordination(ps.all.rel, ord.all.rel,color="type")+
+  stat_ellipse()+
+  theme_cowplot()
+plot.all.rel #beautiful U shape
+```
+
+### Aitchison (spelling?)
+
+#### Full dataset
+
+```{r}
+ps.clean.exp <- subset_samples(ps.clean,type=="A.albopictus"|type=="Microbial Water")
+
+ps.exp.clr <- tax_transform(ps.clean.exp,"clr")
+
+ord.exp.clr <- ordinate(ps.exp.clr, "PCoA", "euclidean")
+
+gg.exp <- plot_ordination(ps.exp.clr, ord.exp.clr,color="type",label="mesocosm",shape="temperature")+
+  scale_color_manual(name="Type",values=c("grey20","grey50"),labels=c("Mosq.","Water"))+
+  theme_cowplot()+
+  scale_shape_manual(name="Temperature",values=c(15,17),labels=c("Cool","Warm"))+
+  ggtitle("Full dataset")
+  #scale_fill_manual(values=c("white","black"),name="Type",labels=c("Mosq.","Water"))
+gg.exp
+
+##extract data so I can make it look how I want
+df.exp.plot <- gg.exp[["data"]]
+##new variable for plotting colors
+df.exp.plot$inf.temp <- paste0(df.exp.plot$infusion,"_",df.exp.plot$temperature)
+  
+gg.exp.full <- ggplot(df.exp.plot,aes(x=Axis.1,y=Axis.2,fill=inf.temp,shape=inf.temp))+
+  theme_cowplot()+
+  stat_ellipse(aes(linetype=type,color=inf.temp),linewidth=0.6)+
+  xlab("Axis 1 (52.3%)")+
+  ylab("Axis 2 (11.4%)")+
+  geom_point(color="gray70")+
+  scale_color_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  ggtitle("Both sample types")+
+  scale_linetype_manual(values=c("solid","dashed"),name="Sample type",labels=c("Mosq.","Water"))+
+  theme(legend.key.width=unit(1,"cm"),plot.title = element_text(face = "plain"))
+  #theme(axis.text.x=element_text(angle=90),legend.key.width=unit(1,"cm"))
+gg.exp.full
+```
+
+## Mosquitoes - less trimmed
+
+### Multivariate plot
+
+```{r}
+#ps.mq.rel <- transform_sample_counts(ps.trim.mq, function(x) x / sum(x) )
+#ps.mq.rel <- transform_sample_counts(ps.mq, function(x) x / sum(x) )
+#ps.trim.mq.hel <- transform_sample_counts(ps.trim.mq, function(OTU) sqrt(OTU/sum(OTU)))
+ps.mq.clr <- tax_transform(ps.mq,"clr")
+
+ord.mq.clr <- ordinate(ps.mq.clr, "PCoA", "euclidean")
+
+gg.mq <- plot_ordination(ps.mq.clr, ord.mq.clr,color="infusion")+
+  stat_ellipse()+
+  theme_cowplot()
+gg.mq
+
+##extract data so I can make it look how I want
+df.plot.mq <- gg.mq[["data"]]
+##new variable for plotting colors
+df.plot.mq$inf.temp <- paste0(df.plot.mq$infusion,"_",df.plot.mq$temperature)
+
+gg.pcoa.aitch.mq <- ggplot(df.plot.mq,aes(x=Axis.1,y=Axis.2,fill=inf.temp,shape=inf.temp))+
+  theme_cowplot()+
+  stat_ellipse(aes(color=inf.temp),linewidth=0.6)+
+  xlab("Axis 1 (17.6%)")+
+  ylab("Axis 2 (14.3%)")+
+  geom_point(color="gray70")+
+  scale_color_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  ggtitle("Mosquitoes only")+
+  #scale_linetype_manual(values=c("solid","dashed","solid","dashed","solid","dashed"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  theme(legend.key.width=unit(1,"cm"),plot.title = element_text(face = "plain"))
+  #theme(axis.text.x=element_text(angle=90),legend.key.width=unit(1,"cm"))
+
+gg.pcoa.aitch.mq
+```
+
+### Both panels - with diversity (Fig. 2)
+
+Not knitting because requires the diversity script to be run also
+
+```{r, eval=F}
+#ggarrange(gg.exp.full,gg.pcoa.aitch.mq,labels=c("c","d"),common.legend=TRUE,legend="right")
+
+gg.comp <- ggarrange(gg.exp.full,gg.pcoa.aitch.mq,labels=c("c","d"),common.legend=TRUE,legend="right")
+
+ggarrange(gg.div,gg.comp,nrow=2,heights=c(0.8,1))
+
+#ggsave("fig.div.alpha.beta.pdf",height=6,width=8)
+```
+
+## Comparing prevalence-trimmed levels
+
+```{r}
+ps.trim.exp <- merge_phyloseq(ps.trim.mq,ps.trim.mw)
+
+ps.trim.exp.clr <- tax_transform(ps.trim.exp,"clr")
+
+ord.trim.exp.clr <- ordinate(ps.trim.exp.clr, "PCoA", "euclidean")
+
+gg.exp.trim <- plot_ordination(ps.trim.exp.clr, ord.trim.exp.clr,color="type",label="mesocosm",shape="temperature")+
+  scale_color_manual(name="Type",values=c("grey20","grey50"),labels=c("Mosq.","Water"))+
+  theme_cowplot()+
+  scale_shape_manual(name="Temperature",values=c(15,17),labels=c("Cool","Warm"))+
+  ggtitle("Prevalence-trimmed")
+  #scale_fill_manual(values=c("white","black"),name="Type",labels=c("Mosq.","Water"))
+gg.exp.trim
+
+ggarrange(gg.exp,gg.exp.trim,common.legend=T,legend="right",labels=c("a","b"))
+#ggsave(file="pcoa.mesoslabeled.png",width=9,height=4)
+```
+
+# Trimmed vs. untrimmed stats
+
+## Mesocosm summed
+
+### Data - trimmed for mixed models
+
+```{r}
+##merge by mesocosm - mosquitoes
+ps.trim.mq.mer <- merge_samples(ps.trim.mq, "mesocosm")
+samdf.trim.mq <- data.frame(sample_data(ps.trim.mq))
+samdf.trim.mq.less <- samdf.trim.mq %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.trim.mq.uniq <- distinct(samdf.trim.mq.less)
+row.names(samdf.trim.mq.uniq) <- samdf.trim.mq.uniq$mesocosm
+sample_data(ps.trim.mq.mer) <- sample_data(samdf.trim.mq.uniq)
+
+##merge by mesocosm - water
+ps.trim.mw.mer <- merge_samples(ps.trim.mw, "mesocosm")
+samdf.trim.mw <- data.frame(sample_data(ps.trim.mw))
+samdf.trim.mw.less <- samdf.trim.mw %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.trim.mw.uniq <- distinct(samdf.trim.mw.less)
+row.names(samdf.trim.mw.uniq) <- samdf.trim.mw.uniq$mesocosm
+sample_data(ps.trim.mw.mer) <- sample_data(samdf.trim.mw.uniq)
+```
+
+### Statz trimmed - mosquitoes
+
+```{r}
+ps.trim.mq.mer.clr <- tax_transform(ps.trim.mq.mer,"clr")
+
+seq.trim.mq.mer.clr <- data.frame(ps.trim.mq.mer.clr@otu_table)
+samdf.trim.mq.mer.clr <- data.frame(ps.trim.mq.mer.clr@sam_data)
+
+dist.aich.trim.mq.mer <- vegdist(seq.trim.mq.mer.clr, method="euclidean")
+
+##beta - infusion
+bet.aich.trim.mq.mer.inf <- betadisper(dist.aich.trim.mq.mer,samdf.trim.mq.mer.clr$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mq.mer.inf,permutations=999) #ns
+permutest(bet.aich.trim.mq.mer.inf,permutations=999,pairwise=T)
+boxplot(bet.aich.trim.mq.mer.inf) #ns
+
+##beta - temperature
+bet.aich.trim.mq.mer.tem <- betadisper(dist.aich.trim.mq.mer,samdf.trim.mq.mer.clr$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mq.mer.tem,permutations=999) #ns
+boxplot(bet.aich.trim.mq.mer.tem) #ns
+
+##beta - dispersal
+bet.aich.trim.mq.mer.dis <- betadisper(dist.aich.trim.mq.mer,samdf.trim.mq.mer.clr$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mq.mer.dis,permutations=999) #ns
+boxplot(bet.aich.trim.mq.mer.dis) #ns
+
+##adonis
+adonis2(dist.aich.trim.mq.mer ~ infusion+temperature+dispersal, data=samdf.trim.mq.mer.clr, permutations=999) 
+#             Df SumOfSqs      R2      F Pr(>F)    
+# infusion     2    759.9 0.15531 5.1886  0.001 ***
+# temperature  1    133.2 0.02723 1.8193  0.044 *  
+# dispersal    1    118.7 0.02426 1.6213  0.066 .  
+# Residual    53   3881.3 0.79320                  
+# Total       57   4893.2 1.00000                  
+
+```
+
+### Statz trimmed - water
+
+```{r}
+ps.trim.mw.mer.clr <- tax_transform(ps.trim.mw.mer,"clr")
+
+seq.trim.mw.mer.clr <- data.frame(ps.trim.mw.mer.clr@otu_table)
+samdf.trim.mw.mer.clr <- data.frame(ps.trim.mw.mer.clr@sam_data)
+
+dist.aich.trim.mw.mer <- vegdist(seq.trim.mw.mer.clr, method="euclidean")
+
+##beta - infusion
+bet.aich.trim.mw.mer.inf <- betadisper(dist.aich.trim.mw.mer,samdf.trim.mw.mer.clr$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mw.mer.inf,permutations=999) #sig***
+permutest(bet.aich.trim.mw.mer.inf,permutations=999,pairwise=T)
+boxplot(bet.aich.trim.mw.mer.inf) #all sig
+
+##beta - temperature
+bet.aich.trim.mw.mer.tem <- betadisper(dist.aich.trim.mw.mer,samdf.trim.mw.mer.clr$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mw.mer.tem,permutations=999) #0.057 .
+boxplot(bet.aich.trim.mw.mer.tem) #ns
+
+##beta - dispersal
+bet.aich.trim.mw.mer.dis <- betadisper(dist.aich.trim.mw.mer,samdf.trim.mw.mer.clr$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.trim.mw.mer.dis,permutations=999) #ns
+boxplot(bet.aich.trim.mw.mer.dis) #ns
+
+##adonis
+adonis2(dist.aich.trim.mw.mer ~ infusion+temperature+dispersal, data=samdf.trim.mw.mer.clr, permutations=999) 
+#             Df SumOfSqs      R2       F Pr(>F)    
+# infusion     2   5766.5 0.64480 67.6368  0.001 ***
+# temperature  1    213.1 0.02382  4.9982  0.002 ** 
+# dispersal    1    107.4 0.01201  2.5196  0.053 .  
+# Residual    67   2856.1 0.31936                   
+# Total       71   8943.1 1.00000                   
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+### Data - not trimmed
+
+```{r}
+##merge by mesocosm - mosquitoes
+ps.mq.mer <- merge_samples(ps.mq, "mesocosm")
+samdf.mq <- data.frame(sample_data(ps.mq))
+samdf.mq.less <- samdf.mq %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.mq.uniq <- distinct(samdf.mq.less)
+row.names(samdf.mq.uniq) <- samdf.mq.uniq$mesocosm
+sample_data(ps.mq.mer) <- sample_data(samdf.mq.uniq)
+
+##merge by mesocosm - water
+ps.mw.mer <- merge_samples(ps.mw, "mesocosm")
+samdf.mw <- data.frame(sample_data(ps.mw))
+samdf.mw.less <- samdf.mw %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.mw.uniq <- distinct(samdf.mw.less)
+row.names(samdf.mw.uniq) <- samdf.mw.uniq$mesocosm
+sample_data(ps.mw.mer) <- sample_data(samdf.mw.uniq)
+```
+
+### Statz not trimmed - mosquitoes
+
+```{r}
+ps.mq.mer.clr <- tax_transform(ps.mq.mer,"clr")
+
+seq.mq.mer.clr <- data.frame(ps.mq.mer.clr@otu_table)
+samdf.mq.mer.clr <- data.frame(ps.mq.mer.clr@sam_data)
+
+dist.aich.mq.mer <- vegdist(seq.mq.mer.clr, method="euclidean")
+
+##beta - infusion
+bet.aich.mq.mer.inf <- betadisper(dist.aich.mq.mer,samdf.mq.mer.clr$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mq.mer.inf,permutations=999) #ns
+permutest(bet.aich.mq.mer.inf,permutations=999,pairwise=T)
+boxplot(bet.aich.mq.mer.inf) #ns
+
+##beta - temperature
+bet.aich.mq.mer.tem <- betadisper(dist.aich.mq.mer,samdf.mq.mer.clr$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mq.mer.tem,permutations=999) #ns
+boxplot(bet.aich.mq.mer.tem) #ns
+
+##beta - dispersal
+bet.aich.mq.mer.dis <- betadisper(dist.aich.mq.mer,samdf.mq.mer.clr$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mq.mer.dis,permutations=999) #ns
+boxplot(bet.aich.mq.mer.dis) #ns
+
+##adonis
+adonis2(dist.aich.mq.mer ~ infusion+temperature+dispersal, data=samdf.mq.mer.clr, permutations=999) 
+#             Df SumOfSqs      R2      F Pr(>F)    
+# infusion     2    759.9 0.15531 5.1886  0.001 ***
+# temperature  1    133.2 0.02723 1.8193  0.044 *  
+# dispersal    1    118.7 0.02426 1.6213  0.066 .  
+# Residual    53   3881.3 0.79320                  
+# Total       57   4893.2 1.00000                  
+
+```
+
+### Statz not trimmed - water
+
+```{r}
+ps.mw.mer.clr <- tax_transform(ps.mw.mer,"clr")
+
+seq.mw.mer.clr <- data.frame(ps.mw.mer.clr@otu_table)
+samdf.mw.mer.clr <- data.frame(ps.mw.mer.clr@sam_data)
+
+dist.aich.mw.mer <- vegdist(seq.mw.mer.clr, method="euclidean")
+
+##beta - infusion
+bet.aich.mw.mer.inf <- betadisper(dist.aich.mw.mer,samdf.mw.mer.clr$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mw.mer.inf,permutations=999) #sig***
+permutest(bet.aich.mw.mer.inf,permutations=999,pairwise=T)
+boxplot(bet.aich.mw.mer.inf) #all sig
+
+##beta - temperature
+bet.aich.mw.mer.tem <- betadisper(dist.aich.mw.mer,samdf.mw.mer.clr$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mw.mer.tem,permutations=999) #0.057 .
+boxplot(bet.aich.mw.mer.tem) #ns
+
+##beta - dispersal
+bet.aich.mw.mer.dis <- betadisper(dist.aich.mw.mer,samdf.mw.mer.clr$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.aich.mw.mer.dis,permutations=999) #ns
+boxplot(bet.aich.mw.mer.dis) #ns
+
+##adonis
+adonis2(dist.aich.mw.mer ~ infusion+temperature+dispersal, data=samdf.mw.mer.clr, permutations=999) 
+# adonis2(formula = dist.aich.mw.mer ~ infusion + temperature + dispersal, data = samdf.mw.mer.clr, permutations = 999)
+#             Df SumOfSqs      R2       F Pr(>F)    
+# infusion     2   6353.4 0.63122 63.3973  0.001 ***
+# temperature  1    240.6 0.02391  4.8023  0.005 ** 
+# dispersal    1    114.0 0.01133  2.2749  0.053 .  
+# Residual    67   3357.2 0.33355                   
+# Total       71  10065.2 1.00000                   
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+# Unifrac things
+
+## Making the phylo tree info
+
+Ran the following once & not doing it while knitting because it takes time
+
+### Subset needed taxa
+
+Only need the taxa that end up in mosquitoes & mesocosm water samples
+
+```{r, eval=F}
+library("dada2")
+library("DECIPHER")
+library("phangorn")
+
+setwd("~/Library/CloudStorage/GoogleDrive-nicolagk@hawaii.edu/My Drive/Mosquito_business/Mosquito_microbes/04.microbiome_analysis/04b.comm_comp")
+
+ps.trim <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+ps.trim #161 taxa, 458 samples
+
+ps.exp <- subset_samples(ps.trim,type=="A.albopictus"|type=="Microbial Water")
+ps.exp #406 samples
+ps.exp.no0 <- prune_taxa(taxa_sums(ps.exp)!=0,ps.exp)
+ps.exp.no0 #103 taxa
+```
+
+### Alignment & tree things
+
+Tutorial from dada2 author [here](https://f1000research.com/articles/5-1492/v2)
+
+```{r, eval=F}
+tax.exp <- data.frame(tax_table(ps.exp.no0))
+head(tax.exp)
+
+seqs <- getSequences(tax.exp$Sequence)
+names(seqs) <- row.names(tax.exp) # This propagates to the tip labels of the tree
+names(seqs)
+
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
+phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phang.align)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phang.align)
+
+## negative edges length changed to 0!
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                     rearrangement = "stochastic", control = pml.control(trace = 0))
+detach("package:phangorn", unload=TRUE)
+#saveRDS(fitGTR, file="phylo.fit.all.rds")
+```
+
+### Add tree to phyloseq objects
+
+```{r, eval=F}
+ps.exp.no0@phy_tree <- phy_tree(fitGTR$tree)
+ps.exp.no0
+
+#saveRDS(ps.exp.no0,file="ps.exp.tree.rds")
+```
+
+## Unifrac objects
+
+Can skip above stuff
+
+```{r}
+setwd("~/Library/CloudStorage/GoogleDrive-nicolagk@hawaii.edu/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04b.comm_comp")
+
+ps.tree <- readRDS("ps.exp.tree.rds")
+ps.tree
+
+fitGTR <- readRDS("phylo.fit.all.rds")
+
+ps.trim.mq@phy_tree <- phy_tree(fitGTR$tree)
+ps.trim.mq
+
+ps.trim.mw@phy_tree <- phy_tree(fitGTR$tree)
+ps.trim.mw
+```
+
+## Mesocosm summed{.tabset}
+
+### Data - trimmed for mixed models
+
+```{r}
+ps.trim.mq.rel <- transform_sample_counts(ps.trim.mq, function(x) x / sum(x))
+ps.trim.mw.rel <- transform_sample_counts(ps.trim.mw, function(x) x / sum(x))
+
+##merge by mesocosm - mosquitoes
+ps.mq.mer <- merge_samples(ps.trim.mq.rel, "mesocosm")
+samdf.mq <- data.frame(sample_data(ps.trim.mq.rel))
+samdf.mq.less <- samdf.mq %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.mq.uniq <- distinct(samdf.mq.less)
+row.names(samdf.mq.uniq) <- samdf.mq.uniq$mesocosm
+sample_data(ps.mq.mer) <- sample_data(samdf.mq.uniq)
+ps.mq.mer
+
+##merge by mesocosm - water
+ps.mw.mer <- merge_samples(ps.trim.mw.rel, "mesocosm")
+samdf.mw <- data.frame(sample_data(ps.trim.mw.rel))
+samdf.mw.less <- samdf.mw %>%
+  dplyr::select(mesocosm,infusion,dispersal,temperature)
+samdf.mw.uniq <- distinct(samdf.mw.less)
+row.names(samdf.mw.uniq) <- samdf.mw.uniq$mesocosm
+sample_data(ps.mw.mer) <- sample_data(samdf.mw.uniq)
+ps.mw.mer
+```
+
+## Statz mesocosm summed - mosquitoes
+
+```{r}
+# Transform counts to relative abundances
+ps.mq.mer.rel <- transform_sample_counts(ps.mq.mer, function(x) x / sum(x))
+ps.mq.mer.rel
+
+#seq.mq.mer.rel <- data.frame(ps.mq.mer.rel@otu_table)
+sam.mq.mer.rel <- data.frame(ps.mq.mer.rel@sam_data)
+
+dist.wuni.mq.rel <- phyloseq::distance(ps.mq.mer.rel, method = "wunifrac")
+
+##beta - infusion
+bet.wuni.mq.rel.inf <- betadisper(dist.wuni.mq.rel,sam.mq.mer.rel$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mq.rel.inf,permutations=999) #sig **
+permutest(bet.wuni.mq.rel.inf,permutations=999,pairwise=T)
+boxplot(bet.wuni.mq.rel.inf) #SW highest
+
+##beta - temperature
+bet.wuni.mq.rel.tem <- betadisper(dist.wuni.mq.rel,sam.mq.mer.rel$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mq.rel.tem,permutations=999) #ns
+boxplot(bet.wuni.mq.rel.tem) #ns
+
+##beta - dispersal
+bet.wuni.mq.rel.dis <- betadisper(dist.wuni.mq.rel,sam.mq.mer.rel$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mq.rel.dis,permutations=999) #ns
+boxplot(bet.wuni.mq.rel.dis) #ns
+
+##adonis
+adonis2(dist.wuni.mq.rel ~ infusion+temperature+dispersal, data=sam.mq.mer.rel, permutations=999) 
+#             Df SumOfSqs      R2      F Pr(>F)    
+# infusion     2  0.42030 0.21125 7.7307  0.001 ***
+# temperature  1  0.08700 0.04373 3.2005  0.039 *  
+# dispersal    1  0.04151 0.02086 1.5270  0.240    
+# Residual    53  1.44075 0.72415                  
+# Total       57  1.98956 1.00000                  
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+## Statz mesocosm summed - water
+
+```{r}
+# Transform counts to relative abundances
+ps.mw.mer.rel <- transform_sample_counts(ps.mw.mer, function(x) x / sum(x))
+ps.mw.mer.rel
+
+#seq.mw.mer.rel <- data.frame(ps.mw.mer.rel@otu_table)
+sam.mw.mer.rel <- data.frame(ps.mw.mer.rel@sam_data)
+
+dist.wuni.mw.rel <- phyloseq::distance(ps.mw.mer.rel, method = "wunifrac")
+
+##beta - infusion
+bet.wuni.mw.rel.inf <- betadisper(dist.wuni.mw.rel,sam.mw.mer.rel$infusion)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mw.rel.inf,permutations=999) #ns
+permutest(bet.wuni.mw.rel.inf,permutations=999,pairwise=T)
+boxplot(bet.wuni.mw.rel.inf) #ns
+
+##beta - temperature
+bet.wuni.mw.rel.tem <- betadisper(dist.wuni.mw.rel,sam.mw.mer.rel$temperature)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mw.rel.tem,permutations=999) #ns
+boxplot(bet.wuni.mw.rel.tem) #ns
+
+##beta - dispersal
+bet.wuni.mw.rel.dis <- betadisper(dist.wuni.mw.rel,sam.mw.mer.rel$dispersal)
+#anova(bet.rad.uk2i)
+permutest(bet.wuni.mw.rel.dis,permutations=999) #ns
+boxplot(bet.wuni.mw.rel.dis) #ns
+
+##adonis
+adonis2(dist.wuni.mw.rel ~ infusion+temperature+dispersal, data=sam.mw.mer.rel, permutations=999) 
+#             Df SumOfSqs      R2        F Pr(>F)    
+# infusion     2   3.7520 0.78212 168.4687  0.001 ***
+# temperature  1   0.2880 0.06004  25.8669  0.001 ***
+# dispersal    1   0.0111 0.00231   0.9955  0.330    
+# Residual    67   0.7461 0.15552                    
+# Total       71   4.7972 1.00000                    
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+# Rel. abun. bar plot - regular~{.tabset}
+
+## Prep - mosquitoes
+
+```{r}
+##Having OTU & size columns in front of Kingdom messes up phyloseq stuff
+tax.mq <- data.frame(ps.mq@tax_table)
+tax.mq.cut <- tax.mq[,3:10]
+tax.mq.cut$OTU <- row.names(tax.mq.cut)
+##custom grouping for microshades below
+tax.mq.cut$gen_culture <- paste0(tax.mq.cut$Genus,"_",tax.mq.cut$Pool_name)
+##making a copy of ps object so I don't overwrite original
+ps.mq.order <- ps.mq
+ps.mq.order@tax_table <- tax_table(as.matrix(tax.mq.cut))
+
+##relative abundance
+ps.mq.rel <- transform_sample_counts(ps.mq.order, function(x) x / sum(x))
+
+samdf.mq <- data.frame(ps.mq.rel@sam_data)
+samdf.mq$glom <- paste0(samdf.mq$sex,"_",samdf.mq$infusion,"_",samdf.mq$temperature)
+samdf.mq$glom
+ps.mq.rel@sam_data <- sample_data(samdf.mq)
+
+ps.mq.rel.glom <- merge_samples(ps.mq.rel, "glom")
+ps.mq.rel.glom.rel <- transform_sample_counts(ps.mq.rel.glom, function(x) x / sum(x))
+
+plot_bar(ps.mq.rel.glom.rel,fill="Family")
+
+##Who are the top families for microshades
+# Merges ASVs that have the same taxonomy rank (Genus)
+ps.mq.rel.fam <- tax_glom(ps.mq.rel, taxrank = "Family") #28 families, 39 gen.
+
+# Calculate taxa sum
+top5 = head(sort(colSums(otu_table(ps.mq.rel.fam)), decreasing = TRUE), 10)
+# Combine count and taxonomyTable
+top5 = cbind(as.data.frame(tax_table(ps.mq.rel.fam)[names(top5),]), Count = top5)
+top5
+#Anaplasmataceae
+#Xanthomonadaceae
+#Weeksellaceae
+#Enterobacteriaceae
+```
+
+## Microshades - mosquitoes
+
+```{r}
+mdf.mq <- prep_mdf(ps.mq.rel.glom.rel,subgroup_level="gen_culture")
+
+# Create a color object for the specified data
+col.mdf.mq <- create_color_dfs(mdf.mq, top_orientation = FALSE,group_level="Family",subgroup_level="gen_culture",selected_groups=c("Anaplasmataceae","Xanthomonadaceae","Weeksellaceae","Enterobacteriaceae"),cvd=TRUE)
+
+#Extract
+col.mdf.mq.m <- col.mdf.mq$mdf
+col.mdf.mq.c <- col.mdf.mq$cdf
+
+##default plot
+plot_microshades(col.mdf.mq.m, col.mdf.mq.c)+
+  #facet_wrap(scales="free")+
+  theme_cowplot()+
+  facet_wrap(~infusion,scales="free")+
+  scale_x_discrete(labels=c("F_cool","F_warm","M_cool","M_warm"))+
+  theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))+
+  xlab("")+
+  ggtitle("Mosquitoes")+
+  guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))
+
+##sample data got removed during conglomerating
+col.mdf.mq.m$sex <- substr(col.mdf.mq.m$Sample,1,1)
+col.mdf.mq.m$infusion <- substr(col.mdf.mq.m$Sample,3,4)
+col.mdf.mq.m$temperature <- substr(col.mdf.mq.m$Sample,6,6)
+col.mdf.mq.m$infusion <- sub("SW","PW",col.mdf.mq.m$infusion)
+col.mdf.mq.m$infusion <- factor(col.mdf.mq.m$infusion,levels=c("OL","SG","PW"))
+
+col.mdf.mq.c$group
+##can't see these ones:
+bye <- c("Enterobacteriaceae-Enterobacteriaceae_unclassified_Pool_Enterobacteriaceae", "Enterobacteriaceae-Other", "Weeksellaceae-Chryseobacterium_", "Xanthomonadaceae-Stenotrophomonas_", "Xanthomonadaceae-Thermomonas_XANT1", "Anaplasmataceae-Wolbachia_", "Other-Bradyrhizobium_", "Other-Asaia_ASAI1/2", "Other-Other")
+col.mdf.mq.m.less <- col.mdf.mq.m[!col.mdf.mq.m$group %in% bye,]
+##fix the lengths of these ones:
+col.mdf.mq.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mq.m.less$group)
+col.mdf.mq.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KLEB1","Enterobacteriaceae-Klebsiella_KLEB1",col.mdf.mq.m.less$group)
+
+##desired order
+col.mdf.mq.m.less$group <- factor(col.mdf.mq.m.less$group,levels=c("Other-Carnobacterium_CARN1","Other-Pseudomonas_PSEU2","Anaplasmataceae-Wolbachia_wAlbB","Anaplasmataceae-Wolbachia_wAlbA","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-unclassified_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1"))
+
+##color order
+col.mdf.mq.c$hex
+hex.colors <- c("#616161","#8B8B8B","#9D654C","#C17754","#098BD9","#56B4E9","#148F77","#7D3560","#A1527F","#CC79A7")
+
+gg.bars.mosq <- ggplot(data=col.mdf.mq.m.less,aes(x=Sample,y=Abundance,fill=group,color=group))+
+  geom_bar(stat="identity", position="stack")+
+  facet_wrap(~infusion,scales="free")+
+  scale_fill_manual(values=hex.colors)+
+  scale_color_manual(values=hex.colors)+
+  ggtitle("Mosquitoes")+
+  guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))+
+  theme_cowplot()+
+  scale_x_discrete(labels=c("F_cool","F_warm","M_cool","M_warm"))+
+  xlab("")+
+  theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))
+```
+
+## Prep - water
+
+```{r}
+##Having OTU & size columns in front of Kingdom messes up phyloseq stuff
+tax.mw <- data.frame(ps.mw@tax_table)
+tax.mw.cut <- tax.mw[,3:10]
+tax.mw.cut$OTU <- row.names(tax.mw.cut)
+##custom grouping for microshades below
+tax.mw.cut$gen_culture <- paste0(tax.mw.cut$Genus,"_",tax.mw.cut$Pool_name)
+##making a copy of ps object so I don't overwrite original
+ps.mw.order <- ps.mw
+ps.mw.order@tax_table <- tax_table(as.matrix(tax.mw.cut))
+
+##relative abundance
+ps.mw.rel <- transform_sample_counts(ps.mw.order, function(x) x / sum(x))
+
+##new sample type so I can group them
+samdf.mw <- data.frame(ps.mw.rel@sam_data)
+samdf.mw$glom <- paste0(samdf.mw$day,"_",samdf.mw$infusion,"_",samdf.mw$temperature)
+samdf.mw$glom
+ps.mw.rel@sam_data <- sample_data(samdf.mw)
+
+ps.mw.rel.glom <- merge_samples(ps.mw.rel, "glom")
+ps.mw.rel.glom.rel <- transform_sample_counts(ps.mw.rel.glom, function(x) x / sum(x))
+
+plot_bar(ps.mw.rel.glom.rel,fill="Family")
+
+##Who are the top families for microshades
+# Merges ASVs that have the same taxonomy rank 
+ps.mw.rel.fam <- tax_glom(ps.mw.rel, taxrank = "Family") #28 families, 39 gen.
+
+# Calculate taxa sum
+top5 = head(sort(colSums(otu_table(ps.mw.rel.fam)), decreasing = TRUE), 10)
+# Combine count and taxonomyTable
+top5 = cbind(as.data.frame(tax_table(ps.mw.rel.fam)[names(top5),]), Count = top5)
+top5
+#Enterobacteriaceae
+#Xanthomonadaceae
+#Acetobacteraceae
+#Weeksellaceae
+```
+
+## Microshades - water
+
+```{r}
+mdf.mw <- prep_mdf(ps.mw.rel.glom.rel,subgroup_level="gen_culture")
+
+# Create a color object for the specified data
+col.mdf.mw <- create_color_dfs(mdf.mw, top_orientation = FALSE,group_level="Family",subgroup_level="gen_culture",selected_groups=c("Enterobacteriaceae","Xanthomonadaceae","Acetobacteraceae","Weeksellaceae"),cvd=TRUE)
+
+#Extract
+col.mdf.mw.m <- col.mdf.mw$mdf
+col.mdf.mw.c <- col.mdf.mw$cdf
+
+##default plot
+plot_microshades(col.mdf.mw.m, col.mdf.mw.c)+
+  #facet_wrap(scales="free")+
+  theme_cowplot()+
+  #scale_x_discrete(labels=c("F_cool","F_warm","M_cool","M_warm"))+
+  theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))+
+  xlab("")+
+  guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))
+
+col.mdf.mw.c.new <- color_reassign(col.mdf.mw.c,
+                          group_assignment = c("Enterobacteriaceae","Xanthomonadaceae","Acetobacteraceae","Weeksellaceae"),
+                          color_assignment = c("micro_cvd_purple","micro_cvd_blue","micro_cvd_green","micro_cvd_turquoise"),group_level="Family")
+
+##check new colors
+plot_microshades(col.mdf.mw.m, col.mdf.mw.c.new)+
+  #facet_wrap(scales="free")+
+  theme_cowplot()+
+  #scale_x_discrete(labels=c("F_cool","F_warm","M_cool","M_warm"))+
+  theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))+
+  xlab("")+
+  guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))
+
+##sample data got removed during conglomerating
+col.mdf.mw.m2 <- cbind(col.mdf.mw.m,data.frame(str_split_fixed(col.mdf.mw.m$Sample,"_",3)))
+col.mdf.mw.m2$X1==col.mdf.mw.m2$day #day lines up
+#X2 = infusion, X3=temp
+
+col.mdf.mw.m2$X2 <- sub("SW","PW",col.mdf.mw.m2$X2)
+col.mdf.mw.m2$X2 <- factor(col.mdf.mw.m2$X2,levels=c("OL","SG","PW"))
+
+col.mdf.mw.c.new$group
+##can't see these ones:
+bye.mw <- c("Acetobacteraceae-Acetobacteraceae_unclassified_","Xanthomonadaceae-Stenotrophomonas_","Xanthomonadaceae-Thermomonas_XANT1","Other-Wolbachia_wAlbB","Other-Other")
+  
+col.mdf.mw.m.less <- col.mdf.mw.m2[!col.mdf.mw.m2$group %in% bye.mw,]
+
+##fix the lengths of these ones:
+##Entero group
+col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mw.m.less$group)
+col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KLEB1","Enterobacteriaceae-Klebsiella_KLEB1",col.mdf.mw.m.less$group)
+col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KOSA2","Enterobacteriaceae-Kosakonia_KOSA2",col.mdf.mw.m.less$group)
+##Other group
+col.mdf.mw.m.less$group <- sub("Other-Bradyrhizobium_","Other-Bradyrhizobium",col.mdf.mw.m.less$group)
+col.mdf.mw.m.less$group <- sub("Other-Gammaproteobacteria_unclassified_","Other-Gammaproteobacteria_unclassified",col.mdf.mw.m.less$group)
+
+##desired order
+col.mdf.mw.m.less$group <- factor(col.mdf.mw.m.less$group,levels=c("Other-Bradyrhizobium","Other-Pseudomonas_PSEU2","Other-Gammaproteobacteria_unclassified","Acetobacteraceae-Asaia_ASAI1/2","Acetobacteraceae-Asaia_ASAI3","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-unclassified_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1","Enterobacteriaceae-Kosakonia_KOSA2","Enterobacteriaceae-Other"))
+
+##switching some colors to match mosquitoes
+hex.colors.mw <- c("#616161","#8B8B8B","#B7B7B7","#4E7705","#6D9F06","#098BD9","#56B4E9","#148F77","#7D3560","#A1527F","#CC79A7","#E794C1","#EFB6D6")
+
+##Sample order
+col.mdf.mw.m.less$Sample <- factor(col.mdf.mw.m.less$Sample, levels=c("4_OL_C","4_OL_H","12_OL_C","12_OL_H","20_OL_C","20_OL_H","4_SG_C","4_SG_H","12_SG_C","12_SG_H","20_SG_C","20_SG_H","4_SW_C","4_SW_H","12_SW_C","12_SW_H","20_SW_C","20_SW_H"))
+
+gg.bars.water <- ggplot(data=col.mdf.mw.m.less,aes(x=Sample,y=Abundance,fill=group,color=group))+
+  geom_bar(stat="identity", position="stack")+
+  facet_wrap(~X2,scales="free")+
+  scale_fill_manual(values=hex.colors.mw)+
+  scale_color_manual(values=hex.colors.mw)+
+  ggtitle("Mesocosm water")+
+  guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))+
+  theme_cowplot()+
+  scale_x_discrete(labels=c("D4_cool","D4_warm","D12_cool","D12_warm","D20_cool","D20_warm"))+
+  xlab("")+
+  theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))
+```
+
+## Both mosq & water
+
+```{r}
+ggarrange(gg.bars.mosq,gg.bars.water,labels=c("(a)","(b)"),nrow=2)
+#ggsave("total_comp.pdf",width=10.5,height=7)
+```
+
+# Rel. abun. box plots - mosquitoes
+
+```{r}
+ps.trim.mq.rel <- transform_sample_counts(ps.trim.mq, function(x) x / sum(x))
+
+melt.trim.mq.rel <- psmelt(ps.trim.mq.rel)
+```
+
+## Wolb in sex
+
+```{r}
+melt.trim.mq.rel.wolb <- subset(melt.trim.mq.rel,Genus=="Wolbachia")
+
+ggplot(data = melt.trim.mq.rel.wolb, aes(x = sex, y = Abundance))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color = OTU), height = 0, width = .2) +
+  facet_wrap(~OTU,scales="free")
+
+melt.trim.mq.rel.1.4 <- subset(melt.trim.mq.rel, OTU %in% c("Otu0001", "Otu0004"))
+
+gg.sex.wolb <- ggplot(data = melt.trim.mq.rel.1.4, aes(x = sex, y = Abundance))+
+  geom_jitter(width=0.2,alpha=0.5)+
+  geom_boxplot(outlier.shape = NA,alpha=0.5)+
+  facet_wrap(~longer_name,scales="free")+
+  xlab("Mosquito sex")+
+  ylab("Relative abundance/sample")+
+  theme_bw()+
+  scale_x_discrete(labels=c("Female","Male"))+
+  guides(color="none")
+gg.sex.wolb
+
+#ggsave("relabun.wolb.pdf",width=4,height=3)
+```
+
+## Chry & pseu in infusion
+
+```{r}
+melt.trim.mq.rel.5.10 <- subset(melt.trim.mq.rel, OTU %in% c("Otu0005", "Otu0010"))
+
+gg.inf <- ggplot(data = melt.trim.mq.rel.5.10, aes(x = infusion, y = Abundance))+
+  geom_jitter(width=0.2,alpha=0.5)+
+  geom_boxplot(outlier.shape = NA,alpha=0.5)+
+  facet_wrap(~longer_name,scales="free")+
+  ylab("Relative abundance/sample")+
+  xlab("Infusion")+
+  scale_x_discrete(labels=c("OL","SG","PW"))+
+  theme_bw()+
+  guides(color="none")
+gg.inf
+
+#ggsave("relabun.chrypseu.pdf",width=4,height=2.5)
+```
+
+## Kleb in temp
+
+```{r}
+melt.trim.mq.rel.kleb <- subset(melt.trim.mq.rel, OTU %in% c("Otu0009","Otu0022"))
+
+gg.tem <- ggplot(data = melt.trim.mq.rel.kleb, aes(x = temperature, y = Abundance))+
+  geom_jitter(width=0.2,alpha=0.5)+
+  geom_boxplot(outlier.shape = NA,alpha=0.5)+
+  facet_wrap(~longer_name,scales="free")+
+  ylab("Relative abundance/sample")+
+  theme_bw()+
+  xlab("Temperature")+
+  scale_x_discrete(labels=c("Cool","Warm"))+
+  ylim(0,0.017)+
+  guides(color="none")
+gg.tem 
+#1 in cool for kleb, 1 in warm for carn, 5 in cool for carn
+
+#ggsave("relabun.chrypseu.pdf",width=4,height=2.5)
+```
+
+## Multiple arranged
+
+```{r}
+#ggarrange(gg.sex.wolb,gg.inf,gg.tem,nrow=3,labels=c("(a)","(b)","(c)"))
+#ggsave(file="relabun.bars.all.pdf",width=5,height=8)
+```
+
+# Relative abundance box plots for mesocosm water
+
+```{r}
+ps.trim.mw.rel <- transform_sample_counts(ps.trim.mw, function(x) x / sum(x))
+
+melt.trim.mw.rel <- psmelt(ps.trim.mw.rel)
+```
+
+## Infusion differences
+
+```{r}
+melt.trim.mw.inf <- subset(melt.trim.mw.rel, OTU %in% c("Otu0003","Otu0005","Otu0007","Otu0024"))
+
+ggplot(data = melt.trim.mw.inf, aes(x = infusion, y = Abundance))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color = longer_name), height = 0, width = .2) +
+  facet_wrap(~longer_name,scales="free")
+
+gg.mw.inf <- ggplot(data = melt.trim.mw.inf, aes(x = infusion, y = Abundance))+
+  geom_jitter(width=0.2,alpha=0.5)+
+  geom_boxplot(outlier.shape = NA,alpha=0.5)+
+  facet_wrap(~longer_name,scales="free")+
+  xlab("Infusion")+
+  ylab("Relative abundance/sample")+
+  theme_bw()+
+  scale_x_discrete(labels=c("OL","SG","PW"))+
+  guides(color="none")
+gg.mw.inf
+
+#ggsave("relabun.wolb.pdf",width=4,height=3)
+```

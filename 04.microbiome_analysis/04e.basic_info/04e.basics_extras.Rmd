@@ -1,0 +1,344 @@
+---
+title: "Basic community, sterility info"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+## Wd, libs
+
+```{r}
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04e.basic_info")
+
+library("phyloseq")
+library("ggplot2")
+library("cowplot")
+library("MicEco")
+library("ggrepel")
+
+# library("vegan")
+
+# #install.packages("colorBlindness")
+# library("colorBlindness")
+# #BiocManager::install("microbiome")
+# library("microbiome")
+# library("dplyr")
+# #install.packages("microViz", repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos")))
+# library(microViz)
+# library("ggpubr")
+# library('tidyverse')
+# library("microshades")
+# 
+# source("pairwiseadonis copy.R")
+```
+
+## Data
+
+```{r}
+ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+#ps.clean <- readRDS("../../02.process_asvs/ps.all.clean.100.less.trim.1.rds")
+ps.clean #161 taxa, 458 samples
+
+ps.raw <- readRDS("../../02.process_asvs/ps.all.raw.100.rds")
+ps.raw
+
+#datasets but trimmed for mixed model things
+ps.trim.mq <- readRDS("../04c.mixed_models/ps.trim.mq.rds")
+ps.trim.mq #29 taxa, 195 samples
+
+ps.trim.mw <- readRDS("../04c.mixed_models/ps.trim.mw.rds")
+ps.trim.mw #39 taxa, 211 samples
+
+ps.trim.exp <- merge_phyloseq(ps.trim.mq,ps.trim.mw)
+```
+
+## Data without cultures & Wolbachia
+
+```{r}
+tax.clean <- data.frame(ps.clean@tax_table)
+
+otus.cultured <- c("Otu0007","Otu0024","Otu0058","Otu0022","Otu0005","Otu0006","Otu0366","Otu0009","Otu0002","Otu0008","Otu0014","Otu0021","Otu0162","Otu0053","Otu0010","Otu0003","Otu0020","Otu0322")
+
+tax.notcultured <- subset(tax.clean,!row.names(tax.clean) %in% otus.cultured)
+
+tax.notcultured.nowalb <- subset(tax.notcultured,Genus!="Wolbachia")
+
+##make a copy before overwriting
+ps.nocult.nowalb <- ps.clean
+
+ps.nocult.nowalb@tax_table <- tax_table(as.matrix(tax.notcultured.nowalb))
+
+ps.nocult.nowalb
+```
+
+# Sterility questions
+
+## Mosquitoes
+
+```{r}
+ps.less <- subset_samples(ps.nocult.nowalb,type=="Hatch water"|type=="Neg_control"|type=="Food water"|type=="Reg spec pool"|type=="Infusion water"|type=="A.albopictus")
+
+ps.less.no0 <- prune_taxa(taxa_sums(ps.less) > 0, ps.less)
+
+ps_venn(ps.less.no0,group="type")
+ps_venn(ps.less.no0,group="type",plot=F)
+
+venn.mq <- ps_venn(ps.less.no0,group="type",plot=F)
+
+mq.df <- data.frame(
+  OTU = unlist(venn.mq),
+  Type = rep(names(venn.mq), sapply(venn.mq, length))
+)
+
+row.names(mq.df) <- c(1:nrow(mq.df))
+
+##the only ones that made it into the experiment would be these ones:
+mq.df.contams <- subset(mq.df,Type=="A.albopictus"|Type=="A.albopictus__Food water__Hatch water__Infusion water"|Type=="A.albopictus__Food water__Infusion water"|Type=="A.albopictus__Hatch water__Infusion water"|Type=="A.albopictus__Food water"|Type=="A.albopictus__Hatch water"|Type=="A.albopictus__Infusion water"|Type=="A.albopictus__Reg spec pool")
+##should be 70
+28+19+4+2+5+6+2+4 
+
+#mq.df.contams$Exp <- "In mosquitoes"
+```
+
+## Mesocosms
+
+```{r}
+ps.less <- subset_samples(ps.nocult.nowalb,type=="Hatch water"|type=="Neg_control"|type=="Food water"|type=="Reg spec pool"|type=="Infusion water"|type=="Microbial Water")
+
+ps.less.no0 <- prune_taxa(taxa_sums(ps.less) > 0, ps.less)
+
+ps_venn(ps.less.no0,group="type")
+ps_venn(ps.less.no0,group="type",plot=F)
+venn.mw <- ps_venn(ps.less.no0,group="type",plot=F)
+
+mw.df <- data.frame(
+  OTU = unlist(venn.mw),
+  Type = rep(names(venn.mw), sapply(venn.mw, length))
+)
+
+row.names(mw.df) <- c(1:nrow(mw.df))
+
+##the only ones that made it into the experiment would be these ones:
+mw.df.contams <- subset(mw.df,Type=="Microbial Water"|Type=="Infusion water__Microbial Water"|Type=="Food water__Hatch water__Infusion water__Microbial Water"|Type=="Hatch water__Microbial Water__Reg spec pool"|Type=="Microbial Water__Reg spec pool")
+##should be 30 
+19+2+1+1+7 
+
+#mw.df.contams$Exp <- "In water"
+```
+
+## Combine
+
+```{r}
+both.df <- rbind(mw.df.contams,mq.df.contams)
+otu.ids <- c(both.df$OTU) #100 total
+otu.ids.uniq <- unique(otu.ids) #80 unique
+```
+
+# Specific ID checks
+
+```{r}
+#contams <- read.csv("contams_meta.csv",header=TRUE)
+ps.clean
+tax.clean <- data.frame(ps.clean@tax_table)
+
+tax.contams <- subset(tax.clean,row.names(tax.clean) %in% otu.ids.uniq)
+
+#write.csv(tax.clean,file="taxa.table.clean.csv")
+#write.csv(tax.contams,file="taxa.table.contams.csv")
+
+##relative abundance
+##make a copy
+ps.clean.rel <- transform_sample_counts(ps.clean, function(x) x / sum(x))
+
+ps.contam.rel <- ps.clean.rel
+
+ps.contam.rel@tax_table <- tax_table(as.matrix(tax.contams))
+ps.contam.rel
+
+ps.contam.rel.no0 <- prune_taxa(taxa_sums(ps.contam.rel) > 0, ps.contam.rel)
+ps.contam.rel.no0
+
+##raw counts
+ps.contam <- ps.clean
+
+ps.contam@tax_table <- tax_table(as.matrix(tax.contams))
+ps.contam
+
+##the sources - relative abundance
+ps.contam.sources <- subset_samples(ps.contam.rel.no0,type=="Infusion water"|type=="Food water"|type=="Hatch water"|type=="Reg spec pool")
+
+ps.contam.sources.no0 <- prune_taxa(taxa_sums(ps.contam.sources) > 0, ps.contam.sources)
+
+plot_bar(ps.contam.sources.no0,fill="Genus")+
+  facet_wrap(~type,scales="free")+
+  theme_cowplot()
+
+##the sources - raw counts
+ps.contam.sources <- subset_samples(ps.contam,type=="Infusion water"|type=="Food water"|type=="Hatch water"|type=="Reg spec pool")
+
+ps.contam.sources.no0 <- prune_taxa(taxa_sums(ps.contam.sources) > 0, ps.contam.sources)
+
+plot_bar(ps.contam.sources.no0,fill="Genus")+
+  facet_wrap(~type,scales="free")+
+  theme_cowplot()
+
+ps.contam2 <- subset_samples(ps.contam.rel.no0,type!="Pos_control"&type!="Dispersal Unfiltered"&type!="Dispersal Filtered"&type!="Neg_control"&type!="Infusion water unfiltered")
+ps.contam2
+
+plot_bar(ps.contam2,fill="Family")+
+  facet_wrap(~type,scales="free")
+
+ps.contam.mq <- subset_samples(ps.contam.rel.no0,type=="A.albopictus")
+
+ps.contam.mq.no0 <- prune_taxa(taxa_sums(ps.contam.mq) > 0, ps.contam.mq)
+
+plot_bar(ps.contam.mq.no0,fill="Family")+
+  facet_wrap(~infusion,scales="free",nrow=3)+
+  theme_cowplot()+
+  theme(axis.text.x=element_blank())
+```
+
+# Bar plots with modified taxa table for filling bar plots
+
+```{r}
+library("plyr")
+
+ps.clean
+tax.clean <- data.frame(ps.clean@tax_table)
+
+contam.ids.df <- data.frame(OTU=otu.ids.uniq,contam="possibly")
+tax.both <- join(tax.clean,contam.ids.df,by="OTU")
+
+tax.both$contam[is.na(tax.both$contam)] <- "no"
+table(tax.both$contam)
+
+for (row in 1:nrow(tax.both)){
+  if(tax.both[row,"Genus"]=="Wolbachia"){
+    tax.both[row,"contam"] <- "Wolbachia"
+  }
+}
+
+table(tax.both$contam)
+row.names(tax.both) <- tax.both$OTU
+##If I don't put the tax rank I want to glom by before a unique value, it won't glom them
+contam.col <- data.frame(contam=tax.both$contam)
+tax.both.reord <- cbind(contam.col,tax.both[,1:11])
+
+ps.edits <- ps.clean
+
+ps.edits@tax_table <- tax_table(as.matrix(tax.both.reord))
+
+ps.edits.rel <- transform_sample_counts(ps.edits, function(x) x / sum(x))
+
+ps.edits.rel.exp <- subset_samples(ps.edits.rel,type=="A.albopictus"|type=="Microbial Water")
+
+ps.edits.rel.exp.no0 <- prune_taxa(taxa_sums(ps.edits.rel.exp) > 0, ps.edits.rel.exp)
+ps.edits.rel.exp.no0
+
+ps.edits.rel.exp.no0.glom <- tax_glom(ps.edits.rel.exp.no0,taxrank="contam")
+ps.edits.rel.exp.no0.glom
+
+samdat.glom <- data.frame(ps.edits.rel.exp.no0.glom@sam_data)
+samdat.glom$type <- sub("A.albopictus","Mosquito",samdat.glom$type)
+samdat.glom$type <- sub("Microbial Water","Meso. water",samdat.glom$type)
+samdat.glom$infusion <- sub("SW","PW",samdat.glom$infusion)
+samdat.glom$infusion <- factor(samdat.glom$infusion,levels=c("OL","SG","PW"))
+ps.edits.rel.exp.no0.glom@sam_data <- sample_data(samdat.glom)
+
+#install.packages("ggh4x")
+library("ggh4x")
+
+plot_bar(ps.edits.rel.exp.no0.glom,fill="contam")+
+  facet_grid2(infusion~type,independent="x",scales="free")+
+  theme_cowplot()+
+  theme(axis.text.x=element_blank())+
+  scale_fill_manual(name="",labels=c("RTP-I","Extraneous","Wolbachia"),values=c("aquamarine3","coral2","burlywood3"))
+
+#ggsave("extra.bar.pdf",width=12,height=8)
+#ggsave("extra.bar.png",width=12,height=8)
+```
+
+# Trimmed for mixed models data
+
+```{r}
+tax.exp <- data.frame(ps.trim.exp@tax_table)
+
+tax.exp.contam <- subset(tax.exp,row.names(tax.exp) %in% otu.ids.uniq)
+
+tax.exp.contam
+```
+
+## Actually the ggpredict model things
+
+```{r}
+#install.packages("ggeffects")
+library(ggeffects)
+library(cowplot)
+library(ggpubr)
+
+pred.mosq <- read.csv("../04c.mixed_models/ggpred.mosq.mosqmod.csv",row.names=1)
+pred.mw <- read.csv("../04c.mixed_models/ggpred.mw.mwmod.csv",row.names=1)
+
+pred.mosq$type <- "Mosquito"
+pred.mw$type <- "Water"
+pred.both <- data.frame(rbind(pred.mosq,pred.mw))
+
+pred.both$OTU <- pred.both$x
+pred.tax <- join(pred.both,tax.both,by="OTU")
+
+pred.tax$group <- sub("SW","PW",pred.tax$group)
+pred.tax$group <- factor(pred.tax$group,levels=c("OL","SG","PW"))
+
+##goodbye Wolbachia
+pred.tax.nowalb <- subset(pred.tax,Genus!="Wolbachia")
+
+pred.contam <- ggplot(pred.tax.nowalb,aes(x=group,y=predicted,color=contam,shape=contam,label=Pool_name))+
+  geom_point(position=position_jitterdodge(jitter.width=0.2))+
+  #geom_jitter()+
+  facet_wrap(~type,scales="free")+
+  theme_cowplot()+
+  scale_shape_manual(name="",values=c(8,4),labels=c("RTP-I","Extraneous"))+
+  scale_color_manual(name="",values=c("aquamarine3","coral2"),labels=c("RTP-I","Extraneous"))+
+  geom_text_repel(color="black")+
+  ylab("Adj. prediction")+
+  xlab("Infusion")
+
+pred.contam
+
+ggplot(pred.tax.nowalb,aes(x=x,y=predicted,fill=contam))+
+  geom_bar(stat="identity",position=position_dodge(0.1))+
+  #geom_point(position=position_jitterdodge(jitter.width=0.2))+
+  #geom_jitter()+
+  facet_wrap(group~type,scales="free")+
+  theme_cowplot()
+  scale_shape_manual(name="",values=c(8,4),labels=c("RTP-I","Extraneous"))+
+  scale_color_manual(name="",values=c("aquamarine3","coral2"),labels=c("RTP-I","Extraneous"))+
+  geom_text_repel(color="black")+
+  ylab("Adj. prediction")+
+  xlab("Infusion")
+
+pred.contam
+
+#ggsave(pred.contam,file="pred.contam.pdf",width=8,height=5)
+#ggsave(pred.contam,file="pred.contam.png",width=8,height=5)
+
+pred.tax.nowalb.mq <- subset(pred.tax.nowalb,type=="Mosquito")
+
+pred.tax.nowalb.mq.contam <- subset(pred.tax.nowalb.mq,contam=="possibly")
+pred.tax.nowalb.mq.nocontam <- subset(pred.tax.nowalb.mq,contam!="possibly")
+
+range(pred.tax.nowalb.mq.contam$predicted)
+range(pred.tax.nowalb.mq.nocontam$predicted)
+
+library("colorBlindness")
+cvdPlot(pred.contam)
+```

@@ -37,12 +37,10 @@ library("bestNormalize")
 ## Data
 
 ```{r}
-setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes/04.microbiome_analysis/04a.diversity")
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04a.diversity")
 
 ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
 ps.clean 
-#ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.rare9200.rds")
-#ps.clean
 
 samdf <- data.frame(ps.clean@sam_data)
 
@@ -50,12 +48,9 @@ samdf <- data.frame(ps.clean@sam_data)
 #df.div <- read.csv("div.trim.csv",row.names=1)
 ```
 
-# Alpha diversity calculations (first run through)
+# Alpha diversity calculations
 
 ```{r}
-##option to run rarefied stuff:
-#ps.clean <- ps.rare
-
 df.all <- data.frame(estimate_richness(ps.clean, split=TRUE, measures=c("Shannon","InvSimpson","Observed")))
 
 df.all$sample_name <- rownames(df.all)
@@ -124,8 +119,8 @@ gg.rich <- ggplot(df.div.exp,aes(x=infusion,y=Observed,fill=inf.temp,shape=inf.t
   ylab("ASV richness")+
   xlab("Infusion")+
   scale_x_discrete(labels=c("OL","SG","PW"))+
-  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
-  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))
 gg.rich
 
 ##water by time
@@ -162,8 +157,8 @@ gg.simp <- ggplot(df.div.exp,aes(x=infusion,y=InvSimpson,fill=inf.temp,shape=inf
   ylab("Simpson's (inv.)")+
   xlab("Infusion")+
   scale_x_discrete(labels=c("OL","SG","PW"))+
-  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
-  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
+  scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))
 gg.simp
 
 gg.mw.simp.time <- ggplot(df.div.water,aes(x=infusion,y=InvSimpson,fill=inf.temp))+
@@ -184,7 +179,7 @@ gg.mw.simp.time <- ggplot(df.div.water,aes(x=infusion,y=InvSimpson,fill=inf.temp
 ### Multi-panel (Figure 2)
 
 ```{r}
-gg.div <- ggarrange(gg.rich,gg.simp,common.legend=T,legend="right",labels=c("(a)","(b)"))
+gg.div <- ggarrange(gg.rich,gg.simp,common.legend=T,legend="right",labels=c("a","b"))
 gg.div
 
 ##just water things
@@ -207,13 +202,14 @@ str(df.div.mw)
 
 #hist(df.div.mw$Observed)
 #shapiro.test(log(df.div.mw$Observed))
-shapiro.test(df.div.mw$Observed)
+#shapiro.test(df.div.mw$Observed)
 
-#wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),family="poisson",data=df.div.mw)
-#wrich2<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),family="compois",data=df.div.mw)
+wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),family="poisson",data=df.div.mw)
+wrich2<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),family="compois",data=df.div.mw)
 wrich3<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
 
-#AICtab(wrich1,wrich2,wrich3)
+AICtab(wrich1,wrich2,wrich3)
+##Gaussian best
 
 ##full model
 wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
@@ -233,7 +229,6 @@ anova(wrich1,wrich1nnd) #0.001874**
 
 Anova(wrich1)
 # Response: Observed
-# Response: Observed
 #                Chisq Df Pr(>Chisq)    
 # day          12.9404  2   0.001549 ** 
 # temperature   0.6742  1   0.411577    
@@ -241,7 +236,7 @@ Anova(wrich1)
 # dispersal     0.7306  1   0.392704    
 # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-AICtab(wrich1,wrich1nd,wrich1ni,wrich1nt,wrich1nnd) #no temp best... almost tied with no dispersal, then full
+#AICtab(wrich1,wrich1nd,wrich1ni,wrich1nt,wrich1nnd) #no temp best... almost tied with no dispersal, then full
 
 ##interactions?
 wrich1.int <- glmmTMB(Observed~day*infusion+temperature+dispersal+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
@@ -274,18 +269,18 @@ Anova(wrich1.int)
 #tapply(df.div.mw$log(Observed), df.div.mw$infusion, mean)
 #tapply(df.div.mw$log(Observed), df.div.mw$day, mean)
 
-wrich1.red <- glmmTMB(Observed~day+infusion+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
-wrich1.red.int <- glmmTMB(Observed~day*infusion+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
-
-anova(wrich1.red,wrich1.red.int) #sig 4e-10***
+wrich1.int.notem <- glmmTMB(Observed~day*infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
+anova(wrich1.int,wrich1.int.notem) #0.38
+wrich1.int.nodis <- glmmTMB(Observed~day*infusion+temperature+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mw)
+anova(wrich1.int,wrich1.int.nodis) #0.38
 
 ##model checking
-shapiro.test(residuals(wrich1.red.int)) #awesome
-qqnorm(residuals(wrich1.red.int))
-qqline(residuals(wrich1.red.int), col="red")
+shapiro.test(residuals(wrich1.int)) #awesome
+qqnorm(residuals(wrich1.int))
+qqline(residuals(wrich1.int), col="red")
 
-#plotResiduals(wrich1.int)
-#wrich1.red.int.resid <- simulateResiduals(fittedModel = wrich1.red.int, plot = T)
+plotResiduals(wrich1.int)
+wrich1.int.resid <- simulateResiduals(fittedModel = wrich1.int, plot = T)
 
 ##posthoc things
 ##just without dispersal because not plotting it
@@ -304,34 +299,49 @@ multcomp::cld(wrich1.int.em)
 
 #### Water richness stats - rarefied
 
-Same as above but without offset for library size. Not knitting this part, just checking out in R
+```{r prep rare data}
+ps.rare <- readRDS("../../02.process_asvs/ps.clean.trim.rare9200.rds")
+ps.rare
 
-```{r, eval=F}
-df.div.mw <- subset(df.div.exp,type=="Meso. water")
+samdf.rare <- data.frame(ps.rare@sam_data)
 
-df.div.mw$day <- as.factor(df.div.mw$day)
-str(df.div.mw)
+df.rare <- data.frame(estimate_richness(ps.rare, split=TRUE, measures=c("Shannon","InvSimpson","Observed")))
 
-#hist(df.div.mw$Observed)
-#shapiro.test(log(df.div.mw$Observed))
-shapiro.test(df.div.mw$Observed)
+df.rare$sample_name <- rownames(df.rare)
 
-#wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal)+(1|mesocosm),family="poisson",data=df.div.mw)
-#wrich2<-glmmTMB(Observed~day+temperature+infusion+dispersal)+(1|mesocosm),family="compois",data=df.div.mw)
-wrich3<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),data=df.div.mw)
+df.rare.div <- merge(df.rare,samdf.rare,by="sample_name") #add sample data
+
+df.rare.div.exp <- subset(df.rare.div,type=="Microbial Water"|type=="A.albopictus")
+```
+
+Same as above but without offset for library size
+
+```{r}
+df.rare.div.mw <- subset(df.rare.div.exp,type=="Microbial Water")
+
+df.rare.div.mw$day <- as.factor(df.rare.div.mw$day)
+str(df.rare.div.mw)
+
+#hist(df.rare.div.mw$Observed)
+#shapiro.test(log(df.rare.div.mw$Observed))
+#shapiro.test(df.rare.div.mw$Observed)
+
+#wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),family="poisson",data=df.rare.div.mw)
+#wrich2<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),family="compois",data=df.rare.div.mw)
+wrich3<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
 
 #AICtab(wrich1,wrich2,wrich3)
 
 ##full model
-wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),data=df.div.mw)
+wrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
 ##no dispersal
-wrich1nd<-glmmTMB(Observed~day+temperature+infusion+(1|mesocosm), data=df.div.mw)
+wrich1nd<-glmmTMB(Observed~day+temperature+infusion+(1|mesocosm), data=df.rare.div.mw)
 ##minus infusion
-wrich1ni<-glmmTMB(Observed~day+temperature+dispersal+(1|mesocosm), data=df.div.mw)
+wrich1ni<-glmmTMB(Observed~day+temperature+dispersal+(1|mesocosm), data=df.rare.div.mw)
 ##minus temperature 
-wrich1nt<-glmmTMB(Observed~day+infusion+dispersal+(1|mesocosm), data=df.div.mw)
+wrich1nt<-glmmTMB(Observed~day+infusion+dispersal+(1|mesocosm), data=df.rare.div.mw)
 ##minus time 
-wrich1nnd<-glmmTMB(Observed~temperature+infusion+dispersal+(1|mesocosm), data=df.div.mw)
+wrich1nnd<-glmmTMB(Observed~temperature+infusion+dispersal+(1|mesocosm), data=df.rare.div.mw)
 
 anova(wrich1,wrich1nd) #0.466
 anova(wrich1,wrich1ni) #2.2e-16***
@@ -350,15 +360,15 @@ Anova(wrich1)
 # ---
 # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-AICtab(wrich1,wrich1nd,wrich1ni,wrich1nt,wrich1nnd) #no temp best... almost tied with no dispersal, then full
+#AICtab(wrich1,wrich1nd,wrich1ni,wrich1nt,wrich1nnd) #no temp best... almost tied with no dispersal, then full
 
 ##interactions?
-wrich1.int <- glmmTMB(Observed~day*infusion+temperature+dispersal+(1|mesocosm),data=df.div.mw)
-wrich1.int1 <- glmmTMB(Observed~day+infusion*temperature+dispersal+(1|mesocosm),data=df.div.mw)
-wrich1.int2 <- glmmTMB(Observed~day+infusion+temperature*dispersal+(1|mesocosm),data=df.div.mw)
-wrich1.int3 <- glmmTMB(Observed~day*temperature+infusion+dispersal+(1|mesocosm),data=df.div.mw)
-wrich1.int4 <- glmmTMB(Observed~day*dispersal+temperature+infusion+(1|mesocosm),data=df.div.mw)
-wrich1.int5 <- glmmTMB(Observed~day+dispersal*infusion+temperature+(1|mesocosm),data=df.div.mw)
+wrich1.int <- glmmTMB(Observed~day*infusion+temperature+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wrich1.int1 <- glmmTMB(Observed~day+infusion*temperature+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wrich1.int2 <- glmmTMB(Observed~day+infusion+temperature*dispersal+(1|mesocosm),data=df.rare.div.mw)
+wrich1.int3 <- glmmTMB(Observed~day*temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wrich1.int4 <- glmmTMB(Observed~day*dispersal+temperature+infusion+(1|mesocosm),data=df.rare.div.mw)
+wrich1.int5 <- glmmTMB(Observed~day+dispersal*infusion+temperature+(1|mesocosm),data=df.rare.div.mw)
 
 anova(wrich1,wrich1.int) #4.35e-11***
 anova(wrich1,wrich1.int1) #ns
@@ -380,21 +390,21 @@ Anova(wrich1.int)
 # ---
 # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-#tapply(df.div.mw$log(Observed), df.div.mw$infusion, mean)
-#tapply(df.div.mw$log(Observed), df.div.mw$day, mean)
+wrich1.int.notem <- glmmTMB(Observed~day*infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
+anova(wrich1.int,wrich1.int.notem) #0.45
+wrich1.int.nodis <- glmmTMB(Observed~day*infusion+temperature+(1|mesocosm),data=df.rare.div.mw)
+anova(wrich1.int,wrich1.int.nodis) #0.45
 
-wrich1.red <- glmmTMB(Observed~day+infusion+(1|mesocosm),data=df.div.mw)
-wrich1.red.int <- glmmTMB(Observed~day*infusion+(1|mesocosm),data=df.div.mw)
-
-anova(wrich1.red,wrich1.red.int) #sig 4e-11**
+#tapply(df.rare.div.mw$log(Observed), df.rare.div.mw$infusion, mean)
+#tapply(df.rare.div.mw$log(Observed), df.rare.div.mw$day, mean)
 
 ##model checking
-shapiro.test(residuals(wrich1.red.int)) #awesome
-qqnorm(residuals(wrich1.red.int))
-qqline(residuals(wrich1.red.int), col="red")
+shapiro.test(residuals(wrich1.int)) #awesome
+qqnorm(residuals(wrich1.int))
+qqline(residuals(wrich1.int), col="red")
 
-#plotResiduals(wrich1.int)
-#wrich1.red.int.resid <- simulateResiduals(fittedModel = wrich1.red.int, plot = T)
+plotResiduals(wrich1.int)
+wrich1.int.resid <- simulateResiduals(fittedModel = wrich1.int, plot = T)
 
 ##posthoc things
 ##just without dispersal because not plotting it
@@ -415,12 +425,9 @@ shapiro.test(df.div.mq$Observed)
 ##different stat families
 mrich1 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mq)
 mrich2 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="compois",data=df.div.mq)
-mrich3 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="genpois",data=df.div.mq)
-mrich4 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="poisson",data=df.div.mq)
-#mrich4 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="nbinom1",data=df.div.mq)
-#mrich5 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="nbinom2",data=df.div.mq)
+mrich3 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),family="poisson",data=df.div.mq)
 
-AICtab(mrich1,mrich2,mrich3,mrich4) #gaussian again
+AICtab(mrich1,mrich2,mrich3) #gaussian again
 
 ##full model
 mrich1 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mq)
@@ -434,6 +441,12 @@ mrich1nt <- glmmTMB(Observed~newday+infusion+dispersal+sex+offset(log(lib_size_t
 mrich1nnd <- glmmTMB(Observed~temperature+infusion+dispersal+sex+offset(log(lib_size_trim))+(1|mesocosm), data=df.div.mq)
 ##minus sex
 mrich1ns <- glmmTMB(Observed~newday+temperature+infusion+dispersal+offset(log(lib_size_trim))+(1|mesocosm),data=df.div.mq)
+
+anova(mrich1,mrich1nd) #0.24
+anova(mrich1,mrich1ni) #0.78
+anova(mrich1,mrich1nt) #0.64
+anova(mrich1,mrich1nnd) #0.40
+anova(mrich1,mrich1ns) #0.53
 
 Anova(mrich1)
 
@@ -453,47 +466,88 @@ multcomp::cld(mrich1.em)
 
 Same as above but without offset for library size
 
-```{r, eval=F}
-df.div.mq <- subset(df.div.exp,type=="Mosquitoes")
+```{r}
+df.rare.div.mq <- subset(df.rare.div.exp,type=="A.albopictus")
 
-hist(df.div.mq$Observed)
-shapiro.test(df.div.mq$Observed)
+#hist(df.rare.div.mq$Observed)
+#shapiro.test(log(df.rare.div.mq$Observed))
+#shapiro.test(df.rare.div.mq$Observed)
 
-##different stat families
-mrich1 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),data=df.div.mq)
-mrich2 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="compois",data=df.div.mq)
-mrich3 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="genpois",data=df.div.mq)
-mrich4 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="poisson",data=df.div.mq)
-#mrich4 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="nbinom1",data=df.div.mq)
-#mrich5 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="nbinom2",data=df.div.mq)
+#mrich1<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),family="poisson",data=df.rare.div.mq)
+#mrich2<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),family="compois",data=df.rare.div.mq)
+#mrich3<-glmmTMB(Observed~day+temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mq)
 
-AICtab(mrich1,mrich2,mrich3,mrich4) #compois 
+#AICtab(mrich1,mrich2,mrich3)
 
 ##full model
-mrich1 <- glmmTMB(Observed~newday+temperature+infusion+dispersal+sex+(1|mesocosm),family="compois",data=df.div.mq)
-##no dispersal 
-mrich1nd <- glmmTMB(Observed~newday+temperature+infusion+sex+(1|mesocosm),family="compois",data=df.div.mq)
-##minus infusion 
-mrich1ni <- glmmTMB(Observed~newday+temperature+dispersal+sex+(1|mesocosm),family="compois",data=df.div.mq)
+mrich1<-glmmTMB(Observed~newday+temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mq)
+##no dispersal
+mrich1nd<-glmmTMB(Observed~newday+temperature+infusion+(1|mesocosm), data=df.rare.div.mq)
+##minus infusion
+mrich1ni<-glmmTMB(Observed~newday+temperature+dispersal+(1|mesocosm), data=df.rare.div.mq)
 ##minus temperature 
-mrich1nt <- glmmTMB(Observed~newday+infusion+dispersal+sex+(1|mesocosm),family="compois",data=df.div.mq)
+mrich1nt<-glmmTMB(Observed~newday+infusion+dispersal+(1|mesocosm), data=df.rare.div.mq)
 ##minus time 
-mrich1nnd <- glmmTMB(Observed~temperature+infusion+dispersal+sex+(1|mesocosm),family="compois", data=df.div.mq)
-##minus sex
-mrich1ns <- glmmTMB(Observed~newday+temperature+infusion+dispersal+(1|mesocosm),family="compois",data=df.div.mq)
+mrich1nnd<-glmmTMB(Observed~temperature+infusion+dispersal+(1|mesocosm), data=df.rare.div.mq)
+
+anova(mrich1,mrich1nd) #0.18
+anova(mrich1,mrich1ni) #0.93
+anova(mrich1,mrich1nt) #0.81
+anova(mrich1,mrich1nnd) #0.27
 
 Anova(mrich1)
+# Analysis of Deviance Table (Type II Wald chisquare tests)
+# 
+# Response: Observed
+#              Chisq Df Pr(>Chisq)
+# newday      2.7059  2     0.2585
+# temperature 0.0606  1     0.8056
+# infusion    0.1441  2     0.9305
+# dispersal   1.8600  1     0.1726
 
+#AICtab(mrich1,mrich1nd,mrich1ni,mrich1nt,mrich1nnd) #no temp best... almost tied with no dispersal, then full
+
+##interactions?
+mrich1.int <- glmmTMB(Observed~newday*infusion+temperature+dispersal+(1|mesocosm),data=df.rare.div.mq)
+mrich1.int1 <- glmmTMB(Observed~newday+infusion*temperature+dispersal+(1|mesocosm),data=df.rare.div.mq)
+mrich1.int2 <- glmmTMB(Observed~newday+infusion+temperature*dispersal+(1|mesocosm),data=df.rare.div.mq)
+mrich1.int3 <- glmmTMB(Observed~newday*temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mq)
+mrich1.int4 <- glmmTMB(Observed~newday*dispersal+temperature+infusion+(1|mesocosm),data=df.rare.div.mq)
+mrich1.int5 <- glmmTMB(Observed~newday+dispersal*infusion+temperature+(1|mesocosm),data=df.rare.div.mq)
+
+anova(mrich1,mrich1.int) #ns
+anova(mrich1,mrich1.int1) #ns
+anova(mrich1,mrich1.int2) #ns
+anova(mrich1,mrich1.int3) #ns
+anova(mrich1,mrich1.int4) #ns
+anova(mrich1,mrich1.int5) #ns
+
+Anova(mrich1.int)
+# Response: Observed
+#                  Chisq Df Pr(>Chisq)
+# newday          2.7401  2     0.2541
+# infusion        0.1459  2     0.9296
+# temperature     0.0121  1     0.9125
+# dispersal       2.4306  1     0.1190
+# newday:infusion 2.4653  3     0.4816
+
+#tapply(df.rare.div.mq$log(Observed), df.rare.div.mq$infusion, mean)
+#tapply(df.rare.div.mq$log(Observed), df.rare.div.mq$day, mean)
+
+##model checking
 shapiro.test(residuals(mrich1))
 qqnorm(residuals(mrich1))
-qqline(residuals(mrich1), col="red")
+qqline(residuals(mrich1.int), col="red")
 
-mrich1.resid <- simulateResiduals(fittedModel = mrich1, plot = T) 
+plotResiduals(mrich1)
+mrich1.resid <- simulateResiduals(fittedModel = mrich1, plot = T)
 
 ##posthoc things
-mrich1.em <- emmeans(mrich1,~infusion*temperature)
+##just without dispersal because not plotting it
+##also not plotting day but it should be in the model somewhere already
+mrich1.em <- emmeans(mrich1,~infusion+temperature)
+
 multcomp::cld(mrich1.em)
-##no differences
 ```
 
 ### Simpson's{.tabset}
@@ -524,59 +578,159 @@ wsimp1nt <- glmmTMB(simp.norm~day+infusion+dispersal+(1|mesocosm),data=df.div.mw
 ##minus time 
 wsimp1nnd <- glmmTMB(simp.norm~temperature+infusion+dispersal+(1|mesocosm),data=df.div.mw)
 
+anova(wsimp1,wsimp1nd) #0.86
+anova(wsimp1,wsimp1ni) #2.2e-16***
+anova(wsimp1,wsimp1nt) #9.95e-10***
+anova(wsimp1,wsimp1nnd) #2.65e-09***
+
 Anova(wsimp1)
 # Analysis of Deviance Table (Type II Wald chisquare tests)
 # 
 # Response: simp.norm
 #                Chisq Df Pr(>Chisq)    
-# day          49.7901  2  1.542e-11 ***
-# temperature  41.3001  1  1.306e-10 ***
-# infusion    229.1055  2  < 2.2e-16 ***
-# dispersal     0.0091  1      0.924    
+# day          45.4454  2  1.354e-10 ***
+# temperature  48.9643  1  2.607e-12 ***
+# infusion    276.6117  2  < 2.2e-16 ***
+# dispersal     0.0291  1     0.8644    
 # ---
 # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-##~same results with normalized results
-##same results with rarefied
-
-AICtab(wsimp1,wsimp1nd,wsimp1ni,wsimp1nt,wsimp1nnd)
-##no dispersal good, then full model
 
 ##interaction?
-wsimp1.int1 <- glmmTMB(simp.norm~day*infusion*temperature+(1|mesocosm), data=df.div.mw)
-wsimp1.int2 <- glmmTMB(simp.norm~day*infusion+temperature+(1|mesocosm), data=df.div.mw) #best AIC
-wsimp1.int3 <- glmmTMB(simp.norm~day+infusion*temperature+(1|mesocosm), data=df.div.mw)
-wsimp1.int4 <- glmmTMB(simp.norm~day*temperature+infusion+(1|mesocosm), data=df.div.mw)
+wsimp1.int <- glmmTMB(simp.norm~day*infusion+temperature+dispersal+(1|mesocosm),data=df.div.mw)
+wsimp1.int1 <- glmmTMB(simp.norm~day+infusion*temperature+dispersal+(1|mesocosm),data=df.div.mw)
+wsimp1.int2 <- glmmTMB(simp.norm~day+infusion+temperature*dispersal+(1|mesocosm),data=df.div.mw)
+wsimp1.int3 <- glmmTMB(simp.norm~day*temperature+infusion+dispersal+(1|mesocosm),data=df.div.mw)
+wsimp1.int4 <- glmmTMB(simp.norm~day*dispersal+temperature+infusion+(1|mesocosm),data=df.div.mw)
+wsimp1.int5 <- glmmTMB(simp.norm~day+dispersal*infusion+temperature+(1|mesocosm),data=df.div.mw)
 
-AICtab(wsimp1.int1,wsimp1.int2,wsimp1.int3,wsimp1.int4,wsimp1nd) #int better
-#interaction with day & infusion
+anova(wsimp1,wsimp1.int) #4.27e-09***
+anova(wsimp1,wsimp1.int1) #0.026* #goes away with rarefied data
+anova(wsimp1,wsimp1.int2) #ns
+anova(wsimp1,wsimp1.int3) #ns
+anova(wsimp1,wsimp1.int4) #ns
+anova(wsimp1,wsimp1.int5) #ns
 
-Anova(wsimp1.int2) #all 0.001 sig level, same with rare
+Anova(wsimp1.int)
 # Response: simp.norm
-#                Chisq Df Pr(>Chisq)    
-# day           70.733  2  4.370e-16 ***
-# infusion     227.491  2  < 2.2e-16 ***
-# temperature   39.606  1  3.107e-10 ***
-# day:infusion  58.541  4  5.874e-12 ***
+#                 Chisq Df Pr(>Chisq)    
+# day           62.7925  2  2.316e-14 ***
+# infusion     274.8962  2  < 2.2e-16 ***
+# temperature   47.2450  1  6.264e-12 ***
+# dispersal      0.0397  1      0.842    
+# day:infusion  53.2218  4  7.658e-11 ***
 # ---
 # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-##all of the below was bad before normalizing
-shapiro.test(residuals(wsimp1))
-qqnorm(residuals(wsimp1))
-qqline(residuals(wsimp1), col="red")
+wsimp1.int.notem <- glmmTMB(simp.norm~day*infusion+dispersal+(1|mesocosm),data=df.div.mw)
+anova(wsimp1.int,wsimp1.int.notem) #sig***
+wsimp1.int.nodis <- glmmTMB(simp.norm~day*infusion+temperature+(1|mesocosm),data=df.div.mw)
+anova(wsimp1.int,wsimp1.int.nodis) #0.84
 
-wsimp1.resid <- simulateResiduals(fittedModel = wsimp1, plot = T) 
+##all of the below was worse before normalizing
+shapiro.test(residuals(wsimp1.int))
+qqnorm(residuals(wsimp1.int))
+qqline(residuals(wsimp1.int), col="red")
 
+wsimp1.int.resid <- simulateResiduals(fittedModel = wsimp1.int, plot = T) 
 ##posthoc things
-wsimp1.em <- emmeans(wsimp1,~infusion*temperature)
+wsimp1.em <- emmeans(wsimp1.int,~infusion+temperature)
 multcomp::cld(wsimp1.em)
  # infusion temperature emmean     SE  df lower.CL upper.CL .group
- # SG       C           -1.255 0.0934 202   -1.439  -1.0708  1    
- # SG       H           -0.656 0.0939 202   -0.841  -0.4712   2   
- # OL       C           -0.104 0.0927 202   -0.287   0.0786    3  
- # SW       C            0.442 0.0927 202    0.259   0.6244     4 
- # OL       H            0.495 0.0932 202    0.311   0.6783     4 
- # SW       H            1.040 0.0932 202    0.857   1.2240      5
+ # SG       C           -1.300 0.0886 198   -1.474  -1.1249  1    
+ # SG       H           -0.692 0.0890 198   -0.867  -0.5162   2   
+ # OL       C           -0.105 0.0881 198   -0.278   0.0691    3  
+ # SW       C            0.463 0.0881 198    0.289   0.6365     4 
+ # OL       H            0.503 0.0884 198    0.329   0.6777     4 
+ # SW       H            1.071 0.0884 198    0.896   1.2452      5
+```
+
+#### Water Simpson's stats - rarefied
+
+```{r}
+str(df.rare.div.mw) #make sure day is a factor still
+
+##normalizing because residuals bad below
+bestNormalize(df.rare.div.mw$InvSimpson) #orderNorm
+df.rare.div.mw$simp.norm <- bestNormalize(df.rare.div.mw$InvSimpson)$x.t
+shapiro.test(df.rare.div.mw$simp.norm)
+
+#hist(df.rare.div.mw$Observed)
+#shapiro.test(log(df.rare.div.mw$Observed))
+#shapiro.test(df.rare.div.mw$Observed)
+
+##full model
+wsimp1<-glmmTMB(simp.norm~day+temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
+##no dispersal
+wsimp1nd<-glmmTMB(simp.norm~day+temperature+infusion+(1|mesocosm), data=df.rare.div.mw)
+##minus infusion
+wsimp1ni<-glmmTMB(simp.norm~day+temperature+dispersal+(1|mesocosm), data=df.rare.div.mw)
+##minus temperature 
+wsimp1nt<-glmmTMB(simp.norm~day+infusion+dispersal+(1|mesocosm), data=df.rare.div.mw)
+##minus time 
+wsimp1nnd<-glmmTMB(simp.norm~temperature+infusion+dispersal+(1|mesocosm), data=df.rare.div.mw)
+
+anova(wsimp1,wsimp1nd) #0.87
+anova(wsimp1,wsimp1ni) #2.2e-16***
+anova(wsimp1,wsimp1nt) #8.56e-09***
+anova(wsimp1,wsimp1nnd) #3.65e-10***
+
+Anova(wsimp1)
+# Analysis of Deviance Table (Type II Wald chisquare tests)
+# 
+# Response: simp.norm
+#                Chisq Df Pr(>Chisq)    
+# day          50.7856  2  9.377e-12 ***
+# temperature  42.1866  1  8.297e-11 ***
+# infusion    231.0025  2  < 2.2e-16 ***
+# dispersal     0.0268  1       0.87    
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+##interactions?
+wsimp1.int <- glmmTMB(simp.norm~day*infusion+temperature+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wsimp1.int1 <- glmmTMB(simp.norm~day+infusion*temperature+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wsimp1.int2 <- glmmTMB(simp.norm~day+infusion+temperature*dispersal+(1|mesocosm),data=df.rare.div.mw)
+wsimp1.int3 <- glmmTMB(simp.norm~day*temperature+infusion+dispersal+(1|mesocosm),data=df.rare.div.mw)
+wsimp1.int4 <- glmmTMB(simp.norm~day*dispersal+temperature+infusion+(1|mesocosm),data=df.rare.div.mw)
+wsimp1.int5 <- glmmTMB(simp.norm~day+dispersal*infusion+temperature+(1|mesocosm),data=df.rare.div.mw)
+
+anova(wsimp1,wsimp1.int) #1.148e-09***
+anova(wsimp1,wsimp1.int1) #ns
+anova(wsimp1,wsimp1.int2) #ns
+anova(wsimp1,wsimp1.int3) #ns
+anova(wsimp1,wsimp1.int4) #ns
+anova(wsimp1,wsimp1.int5) #ns
+
+Anova(wsimp1.int)
+# Analysis of Deviance Table (Type II Wald chisquare tests)
+# 
+# Response: simp.norm
+#                 Chisq Df Pr(>Chisq)    
+# day           71.6032  2  2.829e-16 ***
+# infusion     229.6270  2  < 2.2e-16 ***
+# temperature   40.5264  1  1.940e-10 ***
+# dispersal      0.0345  1     0.8526    
+# day:infusion  57.0591  4  1.202e-11 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#tapply(df.rare.div.mw$log(simp.norm), df.rare.div.mw$infusion, mean)
+#tapply(df.rare.div.mw$log(simp.norm), df.rare.div.mw$day, mean)
+
+##model checking
+shapiro.test(residuals(wsimp1.int)) #awesome
+qqnorm(residuals(wsimp1.int))
+qqline(residuals(wsimp1.int), col="red")
+
+plotResiduals(wsimp1.int)
+wsimp1.int.resid <- simulateResiduals(fittedModel = wsimp1.int, plot = T)
+
+##posthoc things
+##just without dispersal because not plotting it
+##also not plotting day but it should be in the model somewhere already
+wsimp1.int.em <- emmeans(wsimp1.int,~infusion+temperature)
+
+multcomp::cld(wsimp1.int.em)
 ```
 
 #### Mosquito Simpson's
@@ -592,7 +746,7 @@ hist(df.div.mq$simp.norm)
 ##full model
 msimp.all <- glmmTMB(simp.norm~newday+temperature+infusion+dispersal+sex+(1|mesocosm), data=df.div.mq)
 ##without sex
-msimp.nosex <- glmmTMB(simp.norm~day+temperature+infusion+dispersal+(1|mesocosm), data=df.div.mq)
+msimp.nosex <- glmmTMB(simp.norm~newday+temperature+infusion+dispersal+(1|mesocosm), data=df.div.mq)
 ##without dispersal
 msimp.nodis <- glmmTMB(simp.norm~newday+temperature+infusion+sex+(1|mesocosm), data=df.div.mq)
 ##without infusion
@@ -602,18 +756,73 @@ msimp.notem <- glmmTMB(simp.norm~newday+infusion+dispersal+sex+(1|mesocosm), dat
 ##without time
 msimp.notim <- glmmTMB(simp.norm~temperature+infusion+dispersal+sex+(1|mesocosm), data=df.div.mq)
 
+anova(msimp.all,msimp.nodis) #0.10
+anova(msimp.all,msimp.noinf) #0.26
+anova(msimp.all,msimp.nosex) #2.72e-14***
+anova(msimp.all,msimp.notem) #0.58
+anova(msimp.all,msimp.notim) #0.31
+
 Anova(msimp.all)
-# Analysis of Deviance Table (Type II Wald chisquare tests)
-# 
 # Response: simp.norm
 #               Chisq Df Pr(>Chisq)    
-# newday       2.2911  2    0.31805    
-# temperature  0.2987  1    0.58469    
-# infusion     2.7011  2    0.25909    
-# dispersal    2.8332  1    0.09234 .  
-# sex         67.5319  1    < 2e-16 ***
+# newday       2.3823  2    0.30387    
+# temperature  0.3062  1    0.58000    
+# infusion     2.7438  2    0.25363    
+# dispersal    2.8697  1    0.09026 .  
+# sex         67.4477  1    < 2e-16 ***
 
-AICtab(msimp.all,msimp.nosex,msimp.nodis,msimp.noinf,msimp.notem,msimp.notim)
+#AICtab(msimp.all,msimp.nosex,msimp.nodis,msimp.noinf,msimp.notem,msimp.notim)
+#no time & no temp tied for best, then no infusion
+
+##all of the below was bad before normalizing
+shapiro.test(residuals(msimp.all))
+qqnorm(residuals(msimp.all))
+qqline(residuals(msimp.all), col="red")
+
+msimp.all.resid <- simulateResiduals(fittedModel = msimp.all, plot = T) 
+
+##posthoc things
+msimp.all.em <- emmeans(msimp.all,~infusion*temperature)
+multcomp::cld(msimp.all.em)
+#no diffs
+```
+
+#### Mosquito Simpson's rarefied
+
+```{r}
+hist(df.rare.div.mq$InvSimpson)
+
+df.rare.div.mq$simp.norm <- bestNormalize(df.rare.div.mq$InvSimpson)$x.t #orderNorm
+hist(df.rare.div.mq$simp.norm)
+
+##full model
+msimp.all <- glmmTMB(simp.norm~newday+temperature+infusion+dispersal+sex+(1|mesocosm), data=df.rare.div.mq)
+##without sex
+msimp.nosex <- glmmTMB(simp.norm~newday+temperature+infusion+dispersal+(1|mesocosm), data=df.rare.div.mq)
+##without dispersal
+msimp.nodis <- glmmTMB(simp.norm~newday+temperature+infusion+sex+(1|mesocosm), data=df.rare.div.mq)
+##without infusion
+msimp.noinf <- glmmTMB(simp.norm~newday+temperature+dispersal+sex+(1|mesocosm), data=df.rare.div.mq)
+##without temperature
+msimp.notem <- glmmTMB(simp.norm~newday+infusion+dispersal+sex+(1|mesocosm), data=df.rare.div.mq)
+##without time
+msimp.notim <- glmmTMB(simp.norm~temperature+infusion+dispersal+sex+(1|mesocosm), data=df.rare.div.mq)
+
+anova(msimp.all,msimp.nodis) #0.095 .
+anova(msimp.all,msimp.noinf) #0.25
+anova(msimp.all,msimp.nosex) #2.21e-14***
+anova(msimp.all,msimp.notem) #0.56
+anova(msimp.all,msimp.notim) #0.31
+
+Anova(msimp.all)
+#               Chisq Df Pr(>Chisq)    
+# newday       2.3527  2    0.30840    
+# temperature  0.3332  1    0.56376    
+# infusion     2.7917  2    0.24762    
+# dispersal    2.9784  1    0.08438 .  
+# sex         67.9982  1    < 2e-16 ***
+
+#AICtab(msimp.all,msimp.nosex,msimp.nodis,msimp.noinf,msimp.notem,msimp.notim)
 #no time & no temp tied for best, then no infusion
 
 ##all of the below was bad before normalizing
@@ -654,11 +863,11 @@ df.div.inf.se
 Doesn't look interesting
 
 ```{r}
-ggplot(df.div.mq,aes(x=day,y=Observed))+
+ggplot(df.div.mq,aes(x=as.numeric(day),y=Observed))+
   geom_point()+
   geom_smooth()
 
-ggplot(df.div.mq,aes(x=day,y=InvSimpson))+
+ggplot(df.div.mq,aes(x=as.numeric(day),y=InvSimpson))+
   geom_point()+
   geom_smooth()
 ```

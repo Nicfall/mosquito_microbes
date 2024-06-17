@@ -1,0 +1,463 @@
+---
+title: "Exp I - regional taxa pool"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+ rmarkdown::html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    highlight: haddock
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+## Libs
+
+```{r}
+library(dplyr)
+# library("vegan")
+library("phyloseq")
+library("ggplot2")
+library("cowplot")
+library("colorBlindness")
+# 
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes/04.microbiome_analysis/04d.regional_taxa")
+```
+
+## Data - more raw
+
+```{r}
+ps.raw <- readRDS("../../02.process_asvs/ps.all.raw.100.rds")
+ps.raw
+
+ps.raw.rtp1 <- subset_samples(ps.raw,type=="Reg spec pool")
+ps.raw.rtp <- prune_taxa(taxa_sums(ps.raw.rtp1)>0,ps.raw.rtp1)
+ps.raw.rtp
+
+ps.raw.rtp.rel = transform_sample_counts(ps.raw.rtp, function(x) x / sum(x))
+otu.raw.rtp.rel <- data.frame(ps.raw.rtp.rel@otu_table)
+
+#write.csv(otu.raw.rtp.rel,file="rtp.rel.csv")
+```
+
+## Data - cleaned
+
+```{r}
+ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+ps.clean
+
+ps.rtp1 <- subset_samples(ps.clean,type=="Reg spec pool")
+ps.rtp <- prune_taxa(taxa_sums(ps.rtp1)>0,ps.rtp1)
+ps.rtp
+
+ps.rtp.rel = transform_sample_counts(ps.rtp, function(x) x / sum(x))
+otu.rtp.rel <- data.frame(ps.rtp.rel@otu_table)
+#lost Otu0366 - I think it was a singleton? 
+
+##adding sample sums for stats stuff below
+# samdf <- data.frame(ps.clean@sam_data)
+# sums <- data.frame(sample_sums(ps.clean))
+# row.names(samdf)==row.names(sums)
+# colnames(sums) <- c("lib_size_clean")
+# samdf.new <- merge(samdf,sums,by=0)
+# rownames(samdf.new) <- samdf.new$Row.names
+# ps.clean@sam_data <- sample_data(samdf.new[,2:27])
+
+# Only keeping clear taxa
+tax.all <- data.frame(ps.clean@tax_table)
+
+otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+otus.list <- c(otus.want$V1)
+
+tax.less <- tax.all[tax.all$OTU %in% otus.list,]
+
+tax.less[tax.less$Pool_name=="",] <- NA
+
+tax.lesser <- tax.less[complete.cases(tax.less$Pool_name),]
+
+ps.clean@tax_table <- tax_table(as.matrix(tax.lesser))
+ps.clean
+
+#ps.rtp <- prune_taxa(taxa_sums(ps.clean)>0,ps.clean)
+
+ps.rtp.mw.mq <- subset_samples(ps.clean,type=="Microbial Water"|type=="A.albopictus")
+
+ps.rtp1 <- prune_taxa(taxa_sums(ps.rtp.mw.mq)>0,ps.rtp.mw.mq)
+
+ps.rtp <- prune_samples(sample_sums(ps.rtp1)>0,ps.rtp1)
+ps.rtp #17 taxa
+
+ps.mq1 <- subset_samples(ps.rtp,type=="A.albopictus")
+ps.mq <- prune_taxa(taxa_sums(ps.mq1) > 0, ps.mq1)
+ps.mq #13 taxa
+
+ps.mw1 <- subset_samples(ps.rtp,type=="Microbial Water")
+ps.mw <- prune_taxa(taxa_sums(ps.mw1) > 0, ps.mw1)
+ps.mw #17 taxa 
+
+##which ones are not present
+taxa_sums(ps.mq1) == 0
+##0021 = PANT4
+##0053 = PSEU1/3
+##0058 = 	BACI1
+##0162 = PROT1
+
+taxa_sums(ps.mw1) == 0
+#all present
+```
+
+# Figuring out the reads makeup of the RTP vs. not RTP
+
+```{r}
+##Read counts
+ps.clean1 <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+ps.clean1
+
+ps.clean <- subset_samples(ps.clean1,type=="Microbial Water"|type=="A.albopictus")
+ps.clean
+
+sum(sample_sums(ps.clean)) #14650990
+
+##How much of the data is Wolbachia
+ps.nowalb <- subset_taxa(ps.clean,Genus!="Wolbachia")
+ps.nowalb
+sum(sample_sums(ps.nowalb)) #7022234
+7022234/14650990 #47.93% not walb
+
+##checking the inverse just in case
+ps.walb <- subset_taxa(ps.clean,Genus=="Wolbachia")
+ps.walb
+sum(sample_sums(ps.walb)) #7628756
+7628756/14650990 #52.07% walb
+
+##Checking RTP things without wolbachia
+# otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+# otus.list <- c(otus.want$V1)
+
+otu.all <- data.frame(ps.nowalb@otu_table)
+
+otus.list <- row.names(tax.lesser)
+
+otu.rtp <- otu.all[,colnames(otu.all) %in% otus.list]
+otu.nortp <- otu.all[,!colnames(otu.all) %in% otus.list]
+
+##counts without wolbachia data
+sum(otu.all) #7022234
+sum(otu.rtp) #6768591
+sum(otu.nortp) #253643
+6768591/7022234 #96.4% of non-wolbachia data
+
+##Read counts in mosquitoes
+ps.mq <- subset_samples(ps.clean,type=="A.albopictus")
+sum(sample_sums(ps.mq)) #8789668
+
+##mosquito subset, RTP counts without wolbachia
+ps.nowalb.mq <- subset_samples(ps.nowalb,type=="A.albopictus")
+
+otu.mq <- data.frame(ps.nowalb.mq@otu_table)
+
+otu.mq.rtp <- otu.mq[,colnames(otu.mq) %in% otus.list]
+otu.mq.nortp <- otu.mq[,!colnames(otu.mq) %in% otus.list]
+
+sum(otu.mq) #1182484
+1182484/8789668 #13.5%
+sum(otu.mq.rtp) #1166347
+sum(otu.mq.nortp) #16137
+1166347/1182484
+##0.9863533
+
+##Just wolbachia
+ps.walb.mq <- subset_samples(ps.walb,type=="A.albopictus")
+sum(sample_sums(ps.walb.mq)) #7607184
+7607184/8789668
+#86.5% walb
+
+##Read counts in water
+ps.mw <- subset_samples(ps.clean,type=="Microbial Water")
+sum(sample_sums(ps.mw)) #5861322
+
+ps.nowalb.mw <- subset_samples(ps.nowalb,type=="Microbial Water")
+sum(sample_sums(ps.nowalb.mw)) #5839750
+5839750/5861322 #99.6%
+5861322-5839750 #21,572 reads are walb
+21572/5861322 #0.4%
+
+##How many are in RTP
+otu.mw <- data.frame(ps.nowalb.mw@otu_table)
+
+otu.mw.rtp <- otu.mw[,colnames(otu.mw) %in% otus.list]
+otu.mw.nortp <- otu.mw[,!colnames(otu.mw) %in% otus.list]
+
+sum(otu.mw) #5839750
+sum(otu.mw.rtp) #5602244
+sum(otu.mw.nortp) #237506
+
+5602244/5839750
+##95.9%
+```
+
+# Final? round
+
+## Prep
+
+```{r}
+library("data.table")
+library(dplyr)
+
+source("phyloseq.fxns.R")
+
+ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+
+ps.clean.rel <- transform_sample_counts(ps.clean, function(x) x / sum(x))
+
+##mosquitoes
+ps.mq.rel <- subset_samples(ps.clean.rel,type=="A.albopictus")
+##infusions
+ps.mq.rel.ol1 <- subset_samples(ps.mq.rel,infusion=="OL")
+ps.mq.rel.ol <- prune_taxa(taxa_sums(ps.mq.rel.ol1) > 0, ps.mq.rel.ol1)
+ps.mq.rel.ol
+
+ps.mq.rel.sg1 <- subset_samples(ps.mq.rel,infusion=="SG")
+ps.mq.rel.sg <- prune_taxa(taxa_sums(ps.mq.rel.sg1) > 0, ps.mq.rel.sg1)
+ps.mq.rel.sg
+
+ps.mq.rel.sw1 <- subset_samples(ps.mq.rel,infusion=="SW")
+ps.mq.rel.sw <- prune_taxa(taxa_sums(ps.mq.rel.sw1) > 0, ps.mq.rel.sw1)
+ps.mq.rel.sw
+
+##mesoosm water
+ps.mw.rel <- subset_samples(ps.clean.rel,type=="Microbial Water")
+##infusions
+ps.mw.rel.ol1 <- subset_samples(ps.mw.rel,infusion=="OL")
+ps.mw.rel.ol <- prune_taxa(taxa_sums(ps.mw.rel.ol1) > 0, ps.mw.rel.ol1)
+ps.mw.rel.ol
+
+ps.mw.rel.sg1 <- subset_samples(ps.mw.rel,infusion=="SG")
+ps.mw.rel.sg <- prune_taxa(taxa_sums(ps.mw.rel.sg1) > 0, ps.mw.rel.sg1)
+ps.mw.rel.sg
+
+ps.mw.rel.sw1 <- subset_samples(ps.mw.rel,infusion=="SW")
+ps.mw.rel.sw <- prune_taxa(taxa_sums(ps.mw.rel.sw1) > 0, ps.mw.rel.sw1)
+ps.mw.rel.sw
+
+##RTP OTUs
+#otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+#otus.list <- c(otus.want$V1)
+
+#otus.no <- c("Otu0001","Otu0004","Otu0016","Otu0036","Otu0038","Otu0056","Otu0070","Otu0079","Otu0080","Otu0092")
+
+#otus.rtp <- otus.list[!otus.list %in% otus.no]
+```
+
+## Mean rel abundance
+
+```{r}
+##OL
+sum.mq.rel.ol <- data.frame(summarize_taxa(ps.mq.rel.ol, "OTU"))
+##SG
+sum.mq.rel.sg <- data.frame(summarize_taxa(ps.mq.rel.sg, "OTU"))
+##PW 
+sum.mq.rel.sw <- data.frame(summarize_taxa(ps.mq.rel.sw, "OTU"))
+
+sum.mq.rel.ol$infusion <- c("OL")
+sum.mq.rel.sg$infusion <- c("SG")
+sum.mq.rel.sw$infusion <- c("SW")
+
+sum.mq.rel <- rbind(sum.mq.rel.ol,sum.mq.rel.sg,sum.mq.rel.sw)
+sum.mq.rel$type <- "A.albopictus"
+
+##OL
+sum.mw.rel.ol <- data.frame(summarize_taxa(ps.mw.rel.ol, "OTU"))
+##SG
+sum.mw.rel.sg <- data.frame(summarize_taxa(ps.mw.rel.sg, "OTU"))
+##PW 
+sum.mw.rel.sw <- data.frame(summarize_taxa(ps.mw.rel.sw, "OTU"))
+
+sum.mw.rel.ol$infusion <- c("OL")
+sum.mw.rel.sg$infusion <- c("SG")
+sum.mw.rel.sw$infusion <- c("SW")
+
+sum.mw.rel <- rbind(sum.mw.rel.ol,sum.mw.rel.sg,sum.mw.rel.sw)
+sum.mw.rel$type <- "Microbial Water"
+
+sum.rel <- rbind(sum.mq.rel,sum.mw.rel)
+
+##extract rtp otus
+sum.rel.rtp <- sum.rel[sum.rel$OTU %in% otus.list,]
+
+##sneak peak
+ggplot(sum.rel.rtp,aes(x=infusion,y=OTU,size=meanRA))+
+  geom_point()+
+  #scale_fill_manual(values=pal)+
+  #scale_size_area(name="Mean rel. abund.",breaks=c(0.01,0.05,0.1,0.2,0.4,0.6))+
+  facet_wrap(~type)+
+  #facet_wrap(~type,labeller=labeller(type=fac.labs))+
+  theme_bw()+
+  ylab("Culture name")+
+  scale_y_discrete(limits=rev)+
+  xlab("Infusion")
+```
+
+## Presence/absence
+
+```{r}
+sppAbun <- as.data.frame(ps.rtp@otu_table)
+
+sppAbun[sppAbun > 0] <- 1 #converts from abundance to P/A
+head(sppAbun)
+
+rowSums(sppAbun)
+
+##making a copy
+ps.rtp.copy <- ps.rtp
+ps.rtp.copy@otu_table <- otu_table(sppAbun,taxa_are_rows=F)
+melt.pa <- psmelt(ps.rtp.copy)
+
+##creating an abundance 0 1 column
+melt.pa.grp <- melt.pa %>%
+  group_by(type,taxa_OTU,infusion,sample_name) %>%
+  summarize_at('Abundance',sum)
+#tail(melt.pa.grp)
+
+##sum by 0 or 1 abundance per ASV
+melt.pa.grpn <- melt.pa.grp %>%
+  group_by(type,taxa_OTU,infusion,Abundance) %>%
+  dplyr::summarise(n=n())
+
+##how many samples per type & infusion
+##mosquitoes
+ps.mq <- subset_samples(ps.clean,type=="A.albopictus")
+table(data.frame(ps.mq@sam_data)$infusion)
+#  OL  SG  SW 
+# 101  45  49 
+ps.mw <- subset_samples(ps.clean,type=="Microbial Water")
+table(data.frame(ps.mw@sam_data)$infusion)
+# OL SG SW 
+# 71 69 71 
+
+melt.pa.grpn <- melt.pa.grpn %>%
+  mutate(inf_perc = case_when(
+    type=="A.albopictus" & infusion=="OL" ~ 101,
+    type=="A.albopictus" & infusion=="SG" ~ 45,
+    type=="A.albopictus" & infusion=="SW" ~ 49,
+    type=="Microbial Water" & infusion=="OL" ~ 71,
+    type=="Microbial Water" & infusion=="SG" ~ 69,
+    type=="Microbial Water" & infusion=="SW" ~ 71,
+  ))
+
+melt.pa.grpn$perc_abun <- (melt.pa.grpn$n/melt.pa.grpn$inf_perc)*100
+
+melt.pa.grpn$uniq.id <- paste0(melt.pa.grpn$taxa_OTU,"_",melt.pa.grpn$infusion,"_",melt.pa.grpn$type)
+
+melt.pa.grpn.present <- subset(melt.pa.grpn,Abundance==1)
+
+ggplot(melt.pa.grpn.present,aes(x=taxa_OTU,y=perc_abun,fill=infusion))+
+  geom_bar(stat="identity",position=position_dodge(),color="black")+
+  facet_grid(type~.)+
+  ylab("Prevalence across samples (%)")+
+  #scale_fill_manual(values=c("#7DBA54","#992559","#60eede"),name="Infusion")+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90))
+
+sum.rel.rtp$meanRA.perc <- (sum.rel.rtp$meanRA*100)
+
+ggplot(melt.pa.grpn.present,aes(x=taxa_OTU,y=perc_abun,fill=infusion))+
+  geom_bar(stat="identity",position=position_dodge(),color="black")+
+  facet_grid(type~.)+
+  ylab("Prevalence across samples (%)")+
+  scale_fill_manual(values=c("#7DBA54","#992559","#60eede"),name="Infusion")+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90))+
+  geom_point(data=sum.rel.rtp,aes(x=OTU,y=meanRA.perc,group=infusion),shape=1,color="black",fill=NA,position=position_dodge(width=1))
+
+sum.rel.rtp$uniq.id <- paste0(sum.rel.rtp$OTU,"_",sum.rel.rtp$infusion,"_",sum.rel.rtp$type)
+
+df.both <- merge(sum.rel.rtp,melt.pa.grpn.present,by="uniq.id")
+##checking that the info matches:
+#df.both$type.x==df.both$type.y
+#df.both$infusion.x==df.both$infusion.y
+
+##note: add rev() to colors to reverse
+
+#df.both.uniq <- distinct(df.both)
+
+# #df.both <- df.both %>%
+#   mutate(prev=case_when(
+#     perc_abun<=25 ~ "0-25%",
+#     perc_abun<=50 & perc_abun >25 ~"26-50%",
+#     perc_abun<=75 & perc_abun >50 ~"51-75%",
+#     perc_abun<=100 & perc_abun >75 ~"76-100%",
+#   ))
+
+df.both$type.x <- sub("A.albopictus","Mosquitoes",df.both$type.x)
+df.both$type.x <- sub("Microbial Water","Meso. water",df.both$type.x)
+df.both$type.x <- factor(df.both$type.x,levels=c("Mosquitoes","Meso. water"))
+
+df.both$infusion.x <- sub("SW","PW",df.both$infusion.x)
+df.both$infusion.x <- factor(df.both$infusion.x,levels=c("OL","SG","PW"))
+
+terran <- c("#000000FF", "#2A1C0FFF", "#54391EFF", "#7C5936FF", "#A27F5EFF", "#C7A585FF", "#D3B9A2FF", "#D1C3B9FF", "#D0CED1FF")
+
+df <- data.frame(x=c(1,2),y=c("a","b"),exp=c("rd1","rd2"))
+df
+
+ggplot(data=df,aes(x=x,y=y))+
+  geom_point()+
+  scale_y_discrete(labels=df$exp)
+
+##getting more taxa info per otu
+# Add a new column to df1 with the values of B from df2 where the IDs match
+df.both$Pool_name <- melt.pa[match(df.both$OTU, melt.pa$OTU), "Pool_name"]
+
+unique(df.both$OTU)
+pool.names <- unique(df.both$Pool_name)
+
+gg.relabun <- ggplot(df.both,aes(x=infusion.x,y=OTU,size=perc_abun,fill=meanRA))+
+  facet_wrap(~type.x)+
+  #scale_y_discrete(labels=c(pool.names))+
+  geom_point(shape=21,color="black")+
+  scale_size_area(name="Prevalence (%)")+
+  #scale_size_area(name="Mean rel. abund.",breaks=c(0.01,0.05,0.1,0.2,0.4,0.6))+
+  theme_bw()+
+  ylab("Culture name")+
+  #scale_fill_gradientn(colors=rev(hcl.colors(20,"BrwnYl")),name="Mean rel. abun.")+
+  scale_fill_gradientn(colors=rev(terran),name="Mean rel. abun.",n.breaks=7)+
+  scale_y_discrete(limits=rev,labels=c(rev(pool.names)))+
+  xlab("Infusion")+
+  theme(axis.text.y = element_text(face=c('plain','plain','plain','plain','plain','plain','plain','plain','plain','bold','plain','plain','plain','plain','bold','plain','plain')))
+gg.relabun
+
+##switching x & y maybe
+gg.relabun <- ggplot(df.both,aes(x=Pool_name,y=infusion.x,size=perc_abun,fill=meanRA))+
+  facet_grid(type.x~.)+
+  #scale_y_discrete(labels=c(pool.names))+
+  geom_point(shape=21,color="black")+
+  scale_size_area(name="Prevalence (%)")+
+  #scale_size_area(name="Mean rel. abund.",breaks=c(0.01,0.05,0.1,0.2,0.4,0.6))+
+  theme_bw()+
+  ylab("Infusion")+
+  #scale_fill_gradientn(colors=rev(hcl.colors(20,"BrwnYl")),name="Mean rel. abun.")+
+  scale_y_discrete(limits=rev)+
+  scale_fill_gradientn(colors=rev(terran),name="Mean rel. abun.",n.breaks=7)+
+  #scale_x_discrete(labels=c(pool.names))+
+  xlab("Culture name")+
+  theme(axis.text.x = element_text(angle=45,hjust=1))
+  #theme(axis.text.x = element_text(angle=45,hjust=1,face=c('plain','plain','plain','plain','bold','plain','plain','plain','plain','plain','plain','plain','plain','bold','plain','plain','plain')))
+gg.relabun
+
+#cvdPlot(gg.relabun)
+```
+
+## Adding mix mod panel
+
+Not knitting because the mixed model panel is in a different folder
+
+```{r, eval=F}
+ggarrange(gg.relabun,gg.pred2,ncol=1,labels=c("a","b"),heights=c(1,1.1))
+# ggsave("fig3_final.pdf",height=8,width=5.75)
+# ggsave("fig3_final.png",height=8,width=5.75)
+```
+

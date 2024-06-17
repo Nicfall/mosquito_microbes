@@ -43,7 +43,7 @@ library("glmmTMB")
 ## Read in data
 
 ```{r}
-setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes_git/01.data_expdesign")
+setwd("/Volumes/Macintosh HD/Users/nicolakriefall/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/Mosquito_microbes/01.data_expdesign")
 
 ##metadata
 ##same file that goes into phyloseq
@@ -160,6 +160,7 @@ meta.mq$emergence <- 1
 
 cox.all <- coxme(Surv(day, emergence)~infusion+temperature+dispersal+(1|mesocosm), data=meta.mq)
 summary(cox.all)
+
 Anova(cox.all)
 
 # Response: Surv(day, emergence)
@@ -180,6 +181,17 @@ cox.all.int3 <- coxme(Surv(day, emergence)~infusion*dispersal+temperature+(1|mes
 AICtab(cox.all,cox.all.int,cox.all.int1,cox.all.int2,cox.all.int3)
 #cox.all best
 
+##infusion
+cox.all.noinf <- coxme(Surv(day, emergence)~temperature+dispersal+(1|mesocosm), data=meta.mq)
+anova(cox.all,cox.all.noinf) #p***
+##temperature
+cox.all.notem <- coxme(Surv(day, emergence)~infusion+dispersal+(1|mesocosm), data=meta.mq)
+anova(cox.all,cox.all.notem) #p***
+##dispersal
+cox.all.nodis <- coxme(Surv(day, emergence)~infusion+temperature+(1|mesocosm), data=meta.mq)
+anova(cox.all,cox.all.nodis) #0.06 .
+
+##groups
 cox.all.em <- emmeans(cox.all,~infusion+temperature)
 multcomp::cld(cox.all.em)
 ```
@@ -290,12 +302,12 @@ surv2.se
 
 ggplot(surv2.se,aes(x=infusion,y=count10,fill=inf.temp))+
   geom_bar(stat="identity",position=position_dodge(),color="black")+
-  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
+  scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL, cool","OL, warm","SG, cool","SG, warm","PW, cool","PW, warm"))+
   theme_cowplot()+
   geom_errorbar(aes(ymin=count10-se,ymax=count10+se,width=0.2),position=position_dodge(1))+
   ylim(0,55)+
   theme()+
-  ylab("% emerged/mesocosm")+
+  ylab("Emerged/meso. (%)")+
   xlab("")+
   scale_x_discrete(labels=c("OL","SG","PW"))
   #geom_text(aes(label=round(count10)),vjust=-0.25,position=position_dodge(1))
@@ -323,6 +335,12 @@ AICtab(mod.surv,mod.surv.int,mod.surv.int1,mod.surv.int2,mod.surv.int3)
 #interaction better
 
 Anova(mod.surv.int2)
+
+anova(mod.surv,mod.surv.int2) #p<0.05*
+
+mod.surv.int2.nodis <- glmmTMB(cbind(count,10-count)~infusion*temperature+(1|mesocosm), family="binomial", data=surv2)
+
+anova(mod.surv.int2,mod.surv.int2.nodis) #0.53
 
 mod.surv.int2.resid <- simulateResiduals(fittedModel = mod.surv.int2, plot = T)
 
