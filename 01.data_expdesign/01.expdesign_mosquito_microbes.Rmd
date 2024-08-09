@@ -18,11 +18,11 @@ editor_options:
 
 ```{r}
 library("dplyr")
-#install.packages("lubridate")
+# #install.packages("lubridate")
 library("lubridate")
 library("ggplot2")
 library("cowplot")
-#install.packages("Rmisc")
+# #install.packages("Rmisc")
 library("Rmisc")
 #install.packages("coxme")
 library("coxme")
@@ -35,8 +35,6 @@ library("emmeans")
 library("DHARMa")
 #install.packages("multcomp")
 library("multcomp")
-#install.packages("multcompView")
-library("multcompView")
 library("glmmTMB")
 ```
 
@@ -127,10 +125,11 @@ ggplot(meta.mq,aes(x=day,fill=inf_temp))+
   facet_grid(temperature~.)+
   theme(text=element_text(size=12),axis.text.x=element_text(size=12),axis.text.y=element_text(size=12))
 
-#ggsave(file="exp1_timelineNov23.pdf",height=3.25,width=5.25)
+#ggsave(file="fig1_timeline_aug24.pdf",height=3.25,width=5.25)
+#ggsave(file="fig1_timeline_aug24.png",height=3.25,width=5.25)
 ```
 
-## Average time to emergence (Supp. fig)
+## Average time to emergence (Fig. S1)
 
 ```{r}
 meta.mq.se <- summarySE(meta.mq,measurevar="day",groupvars=c("inf_temp","infusion"))
@@ -145,7 +144,9 @@ ggplot(meta.mq,aes(x=infusion,y=day,fill=inf_temp,shape=inf_temp))+
   scale_fill_manual(values=c("#B5D69F","#7DBA54","#C488A2","#992559","#B6F6EE","#60eede"),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
   scale_shape_manual(values=c(22,24,22,24,22,24),name="Infusion, temp.",labels=c("OL_cool","OL_warm","SG_cool","SG_warm","PW_cool","PW_warm"))+
   scale_x_discrete(labels=c("OL","SG","PW"))
-#ggsave("plot.emerge.rate.pdf",width=5,height=3.5)
+
+#ggsave("figs1_emerge_rate_aug24.pdf",width=5,height=3.5)
+#ggsave("figs1_emerge_rate_aug24.png",width=5,height=3.5)
 ```
 
 ### Time to emergence stats
@@ -312,14 +313,13 @@ ggplot(surv2.se,aes(x=infusion,y=count10,fill=inf.temp))+
   scale_x_discrete(labels=c("OL","SG","PW"))
   #geom_text(aes(label=round(count10)),vjust=-0.25,position=position_dodge(1))
 
-#ggsave("gg.prop.pdf",width=4,height=2.5)
+#ggsave("fig1_prop.pdf",width=4,height=2.5)
+#ggsave("fig1_prop.png",width=4,height=2.5)
 ```
 
 ### Stats for success
 
 ```{r}
-# mod.surv <- glmmTMB(cbind(count,10-count)~infusion+temperature+dispersal+(1|mesocosm), family=binomial(link="logit"), data=surv2)
-# mod.surv
 mod.surv <- glmmTMB(cbind(count,10-count)~infusion+temperature+dispersal+(1|mesocosm), family="binomial", data=surv2)
 #mod.surv
 
@@ -396,3 +396,8 @@ qqline(residuals(wolb.full), col="red")
 wolb.full.resid <- simulateResiduals(fittedModel = wolb.full, plot = T)
 ```
 
+# Session info
+
+```{r}
+sessionInfo()
+```
