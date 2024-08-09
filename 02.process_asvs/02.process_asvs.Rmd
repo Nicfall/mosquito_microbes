@@ -18,11 +18,12 @@ editor_options:
 
 ```{r}
 library("phyloseq")
-#library(dplyr)
+library(dplyr)
 library("ggplot2")
 library("cowplot")
 #BiocManager::install("decontam")
 library(decontam)
+library("stringr")
 
 setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/02.process_asvs")
 ```
@@ -109,7 +110,7 @@ taxa <- assignTaxonomy(as.matrix(seqtable), "silva_nr99_v138.1_wSpecies_train_se
 saveRDS(taxa,file="taxa_v138.1_boot60.rds")
 ```
 
-Back in R
+### Back in R
 
 ```{r}
 taxa.1 <- data.frame(readRDS("./counts_taxa_info/taxa_v138.1_boot60.rds"))
@@ -123,11 +124,9 @@ taxa.1$OTU <- seqs$OTU
 row.names(taxa.1) <- taxa.1$OTU
 ```
 
-Add the unclassified business
+### Editing stuff that's 'unclassified' at certain levels
 
-```{r rename ASVs, eval=F}
-library("stringr")
-
+```{r, eval=F}
 tax <- taxa.1
 
 tax.clean <- data.frame(row.names = row.names(tax),
@@ -458,3 +457,8 @@ done
 
 Copied text file contents to excel sheet "mosquito_raw_reads". Divided the reads by 4 because there's four lines of stuff per read. 
 
+# Session info
+
+```{r}
+sessionInfo()
+```
