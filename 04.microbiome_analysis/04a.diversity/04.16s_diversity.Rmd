@@ -21,16 +21,17 @@ library(car)
 library("Rmisc")
 library("ggpubr")
 library("cowplot")
-library("lme4")
+# library("lme4")
 library("phyloseq")
 library("glmmTMB")
 library("emmeans")
-library(multcomp)
-#install.packages("multcompView")
-library(multcompView)
+# library(multcomp)
+# #install.packages("multcompView")
+# library(multcompView)
 library("bbmle")
 library("DHARMa")
-library("nlme")
+# library("nlme")
+#install.packages("bestNormalize")
 library("bestNormalize")
 ```
 
@@ -176,7 +177,7 @@ gg.mw.simp.time <- ggplot(df.div.water,aes(x=infusion,y=InvSimpson,fill=inf.temp
   ggtitle("Mesocosm water")
 ```
 
-### Multi-panel (Figure 2)
+### Multi-panel (Fig 2 subpanel & Fig S10)
 
 ```{r}
 gg.div <- ggarrange(gg.rich,gg.simp,common.legend=T,legend="right",labels=c("a","b"))
@@ -185,7 +186,7 @@ gg.div
 ##just water things
 ggarrange(gg.mw.rich.time,gg.mw.simp.time,common.legend=T,legend="right",nrow=2)
 
-#ggsave("div.water.time.png",width=6,height=6)
+#ggsave("div.water.time.pdf",width=6,height=6)
 ```
 
 ## Statz
@@ -888,3 +889,8 @@ ggplot(meso.corr,aes(x=Observed.x,y=Observed.y))+
   geom_smooth()
 ```
 
+# Session info
+
+```{r}
+sessionInfo()
+```
