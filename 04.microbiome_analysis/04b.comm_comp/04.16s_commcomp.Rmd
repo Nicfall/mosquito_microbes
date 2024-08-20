@@ -21,16 +21,18 @@ library("vegan")
 library("phyloseq")
 library("ggplot2")
 library("cowplot")
-#install.packages("colorBlindness")
-library("colorBlindness")
+# #install.packages("colorBlindness")
+# library("colorBlindness")
 #BiocManager::install("microbiome")
-library("microbiome")
+#library("microbiome")
 library("dplyr")
 #install.packages("microViz", repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos")))
 library(microViz)
 library("ggpubr")
-library('tidyverse')
+# library('tidyverse')
 library("microshades")
+library("stringr")
+library("speedyseq")
 
 setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04b.comm_comp")
 ```
@@ -193,6 +195,7 @@ gg.exp.trim
 
 ggarrange(gg.exp,gg.exp.trim,common.legend=T,legend="right",labels=c("a","b"))
 #ggsave(file="pcoa.mesoslabeled.png",width=9,height=4)
+#ggsave(file="pcoa.mesoslabeled.pdf",width=9,height=4)
 ```
 
 # Trimmed vs. untrimmed stats
@@ -486,7 +489,7 @@ ps.trim.mw@phy_tree <- phy_tree(fitGTR$tree)
 ps.trim.mw
 ```
 
-## Mesocosm summed{.tabset}
+## Mesocosm summed
 
 ### Data - trimmed for mixed models
 
@@ -603,6 +606,31 @@ adonis2(dist.wuni.mw.rel ~ infusion+temperature+dispersal, data=sam.mw.mer.rel, 
 
 # Rel. abun. bar plot - regular~{.tabset}
 
+Need to make some edits to 'culture_name' column for plotting. Specifically, adding wolbachia strain names
+
+```{r}
+ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.less.rds")
+ps.clean #161 taxa, 458 samples
+
+tax.clean <- data.frame(ps.clean@tax_table)
+
+#write.csv(tax.clean,file="tax.clean.toedit.csv")
+
+##read in with edits
+tax.edits <- read.csv("tax.clean.edits.csv",row.names=1)
+
+ps.clean.copy <- ps.clean
+ps.clean.copy@tax_table <- tax_table(as.matrix(tax.edits))
+
+ps.mq1 <- subset_samples(ps.clean.copy,type=="A.albopictus")
+ps.mq <- prune_taxa(taxa_sums(ps.mq1) > 0, ps.mq1)
+ps.mq
+
+ps.mw1 <- subset_samples(ps.clean.copy,type=="Microbial Water")
+ps.mw <- prune_taxa(taxa_sums(ps.mw1) > 0, ps.mw1)
+ps.mw
+```
+
 ## Prep - mosquitoes
 
 ```{r}
@@ -624,7 +652,7 @@ samdf.mq$glom <- paste0(samdf.mq$sex,"_",samdf.mq$infusion,"_",samdf.mq$temperat
 samdf.mq$glom
 ps.mq.rel@sam_data <- sample_data(samdf.mq)
 
-ps.mq.rel.glom <- merge_samples(ps.mq.rel, "glom")
+ps.mq.rel.glom <- merge_samples2(ps.mq.rel, "glom")
 ps.mq.rel.glom.rel <- transform_sample_counts(ps.mq.rel.glom, function(x) x / sum(x))
 
 plot_bar(ps.mq.rel.glom.rel,fill="Family")
@@ -666,24 +694,23 @@ plot_microshades(col.mdf.mq.m, col.mdf.mq.c)+
   xlab("")+
   ggtitle("Mosquitoes")+
   guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))
-
-##sample data got removed during conglomerating
-col.mdf.mq.m$sex <- substr(col.mdf.mq.m$Sample,1,1)
-col.mdf.mq.m$infusion <- substr(col.mdf.mq.m$Sample,3,4)
-col.mdf.mq.m$temperature <- substr(col.mdf.mq.m$Sample,6,6)
-col.mdf.mq.m$infusion <- sub("SW","PW",col.mdf.mq.m$infusion)
-col.mdf.mq.m$infusion <- factor(col.mdf.mq.m$infusion,levels=c("OL","SG","PW"))
+# 
+# ##sample data got removed during conglomerating
+# col.mdf.mq.m$sex <- substr(col.mdf.mq.m$Sample,1,1)
+# col.mdf.mq.m$infusion <- substr(col.mdf.mq.m$Sample,3,4)
+# col.mdf.mq.m$temperature <- substr(col.mdf.mq.m$Sample,6,6)
+# col.mdf.mq.m$infusion <- sub("SW","PW",col.mdf.mq.m$infusion)
+# col.mdf.mq.m$infusion <- factor(col.mdf.mq.m$infusion,levels=c("OL","SG","PW"))
 
 col.mdf.mq.c$group
 ##can't see these ones:
-bye <- c("Enterobacteriaceae-Enterobacteriaceae_unclassified_Pool_Enterobacteriaceae", "Enterobacteriaceae-Other", "Weeksellaceae-Chryseobacterium_", "Xanthomonadaceae-Stenotrophomonas_", "Xanthomonadaceae-Thermomonas_XANT1", "Anaplasmataceae-Wolbachia_", "Other-Bradyrhizobium_", "Other-Asaia_ASAI1/2", "Other-Other")
+bye <- c("Enterobacteriaceae-Family_Enterobacteriaceae_", "Enterobacteriaceae-Other", "Weeksellaceae-Chryseobacterium_", "Xanthomonadaceae-Stenotrophomonas_", "Xanthomonadaceae-Thermomonas_XANT1", "Anaplasmataceae-Wolbachia_", "Other-Bradyrhizobium_", "Other-Asaia_ASAI1/2", "Other-Other")
 col.mdf.mq.m.less <- col.mdf.mq.m[!col.mdf.mq.m$group %in% bye,]
 ##fix the lengths of these ones:
-col.mdf.mq.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mq.m.less$group)
-col.mdf.mq.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KLEB1","Enterobacteriaceae-Klebsiella_KLEB1",col.mdf.mq.m.less$group)
+# col.mdf.mq.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mq.m.less$group)
 
 ##desired order
-col.mdf.mq.m.less$group <- factor(col.mdf.mq.m.less$group,levels=c("Other-Carnobacterium_CARN1","Other-Pseudomonas_PSEU2","Anaplasmataceae-Wolbachia_wAlbB","Anaplasmataceae-Wolbachia_wAlbA","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-unclassified_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1"))
+col.mdf.mq.m.less$group <- factor(col.mdf.mq.m.less$group,levels=c("Other-Carnobacterium_CARN1","Other-Pseudomonas_PSEU2","Anaplasmataceae-Wolbachia_wAlbB","Anaplasmataceae-Wolbachia_wAlbA","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-Family_Enterobacteriaceae_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1"))
 
 ##color order
 col.mdf.mq.c$hex
@@ -700,6 +727,7 @@ gg.bars.mosq <- ggplot(data=col.mdf.mq.m.less,aes(x=Sample,y=Abundance,fill=grou
   scale_x_discrete(labels=c("F_cool","F_warm","M_cool","M_warm"))+
   xlab("")+
   theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))
+gg.bars.mosq
 ```
 
 ## Prep - water
@@ -724,7 +752,7 @@ samdf.mw$glom <- paste0(samdf.mw$day,"_",samdf.mw$infusion,"_",samdf.mw$temperat
 samdf.mw$glom
 ps.mw.rel@sam_data <- sample_data(samdf.mw)
 
-ps.mw.rel.glom <- merge_samples(ps.mw.rel, "glom")
+ps.mw.rel.glom <- merge_samples2(ps.mw.rel, "glom")
 ps.mw.rel.glom.rel <- transform_sample_counts(ps.mw.rel.glom, function(x) x / sum(x))
 
 plot_bar(ps.mw.rel.glom.rel,fill="Family")
@@ -778,31 +806,31 @@ plot_microshades(col.mdf.mw.m, col.mdf.mw.c.new)+
   xlab("")+
   guides(color=guide_legend("Family-Genus-Culture"),fill=guide_legend("Family-Genus-Culture"))
 
-##sample data got removed during conglomerating
-col.mdf.mw.m2 <- cbind(col.mdf.mw.m,data.frame(str_split_fixed(col.mdf.mw.m$Sample,"_",3)))
-col.mdf.mw.m2$X1==col.mdf.mw.m2$day #day lines up
-#X2 = infusion, X3=temp
+# ##sample data got removed during conglomerating
+# col.mdf.mw.m2 <- cbind(col.mdf.mw.m,data.frame(str_split_fixed(col.mdf.mw.m$Sample,"_",3)))
+# col.mdf.mw.m2$X1==col.mdf.mw.m2$day #day lines up
+# #X2 = infusion, X3=temp
 
-col.mdf.mw.m2$X2 <- sub("SW","PW",col.mdf.mw.m2$X2)
-col.mdf.mw.m2$X2 <- factor(col.mdf.mw.m2$X2,levels=c("OL","SG","PW"))
+col.mdf.mw.m$infusion <- sub("SW","PW",col.mdf.mw.m$infusion)
+col.mdf.mw.m$infusion <- factor(col.mdf.mw.m$infusion,levels=c("OL","SG","PW"))
 
 col.mdf.mw.c.new$group
 ##can't see these ones:
-bye.mw <- c("Acetobacteraceae-Acetobacteraceae_unclassified_","Xanthomonadaceae-Stenotrophomonas_","Xanthomonadaceae-Thermomonas_XANT1","Other-Wolbachia_wAlbB","Other-Other")
+bye.mw <- c("Acetobacteraceae-Asaia_","Xanthomonadaceae-Stenotrophomonas_","Xanthomonadaceae-Thermomonas_XANT1","Other-Pseudomonas_","Other-Other")
   
-col.mdf.mw.m.less <- col.mdf.mw.m2[!col.mdf.mw.m2$group %in% bye.mw,]
+col.mdf.mw.m.less <- col.mdf.mw.m[!col.mdf.mw.m$group %in% bye.mw,]
 
-##fix the lengths of these ones:
-##Entero group
-col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mw.m.less$group)
-col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KLEB1","Enterobacteriaceae-Klebsiella_KLEB1",col.mdf.mw.m.less$group)
-col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KOSA2","Enterobacteriaceae-Kosakonia_KOSA2",col.mdf.mw.m.less$group)
+# ##fix the lengths of these ones:
+# ##Entero group
+# col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_ENTE1/2","Enterobacteriaceae-unclassified_ENTE1/2",col.mdf.mw.m.less$group)
+# col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KLEB1","Enterobacteriaceae-Klebsiella_KLEB1",col.mdf.mw.m.less$group)
+# col.mdf.mw.m.less$group <- sub("Enterobacteriaceae-Enterobacteriaceae_unclassified_KOSA2","Enterobacteriaceae-Kosakonia_KOSA2",col.mdf.mw.m.less$group)
 ##Other group
 col.mdf.mw.m.less$group <- sub("Other-Bradyrhizobium_","Other-Bradyrhizobium",col.mdf.mw.m.less$group)
-col.mdf.mw.m.less$group <- sub("Other-Gammaproteobacteria_unclassified_","Other-Gammaproteobacteria_unclassified",col.mdf.mw.m.less$group)
+# col.mdf.mw.m.less$group <- sub("Other-Gammaproteobacteria_unclassified_","Other-Gammaproteobacteria_unclassified",col.mdf.mw.m.less$group)
 
 ##desired order
-col.mdf.mw.m.less$group <- factor(col.mdf.mw.m.less$group,levels=c("Other-Bradyrhizobium","Other-Pseudomonas_PSEU2","Other-Gammaproteobacteria_unclassified","Acetobacteraceae-Asaia_ASAI1/2","Acetobacteraceae-Asaia_ASAI3","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-unclassified_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1","Enterobacteriaceae-Kosakonia_KOSA2","Enterobacteriaceae-Other"))
+col.mdf.mw.m.less$group <- factor(col.mdf.mw.m.less$group,levels=c("Other-Pantoea_PANT1/2/3","Other-Pseudomonas_PSEU2","Other-Bradyrhizobium","Acetobacteraceae-Asaia_ASAI1/2","Acetobacteraceae-Asaia_ASAI3","Xanthomonadaceae-Stenotrophomonas_STEN1","Xanthomonadaceae-Stenotrophomonas_STEN2","Weeksellaceae-Chryseobacterium_CHRY1","Enterobacteriaceae-Kosakonia_KOSA1","Enterobacteriaceae-Family_Enterobacteriaceae_ENTE1/2","Enterobacteriaceae-Klebsiella_KLEB1","Enterobacteriaceae-Kosakonia_KOSA2","Enterobacteriaceae-Other"))
 
 ##switching some colors to match mosquitoes
 hex.colors.mw <- c("#616161","#8B8B8B","#B7B7B7","#4E7705","#6D9F06","#098BD9","#56B4E9","#148F77","#7D3560","#A1527F","#CC79A7","#E794C1","#EFB6D6")
@@ -812,7 +840,7 @@ col.mdf.mw.m.less$Sample <- factor(col.mdf.mw.m.less$Sample, levels=c("4_OL_C","
 
 gg.bars.water <- ggplot(data=col.mdf.mw.m.less,aes(x=Sample,y=Abundance,fill=group,color=group))+
   geom_bar(stat="identity", position="stack")+
-  facet_wrap(~X2,scales="free")+
+  facet_wrap(~infusion,scales="free")+
   scale_fill_manual(values=hex.colors.mw)+
   scale_color_manual(values=hex.colors.mw)+
   ggtitle("Mesocosm water")+
@@ -821,6 +849,7 @@ gg.bars.water <- ggplot(data=col.mdf.mw.m.less,aes(x=Sample,y=Abundance,fill=gro
   scale_x_discrete(labels=c("D4_cool","D4_warm","D12_cool","D12_warm","D20_cool","D20_warm"))+
   xlab("")+
   theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1))
+gg.bars.water
 ```
 
 ## Both mosq & water
@@ -828,6 +857,8 @@ gg.bars.water <- ggplot(data=col.mdf.mw.m.less,aes(x=Sample,y=Abundance,fill=gro
 ```{r}
 ggarrange(gg.bars.mosq,gg.bars.water,labels=c("(a)","(b)"),nrow=2)
 #ggsave("total_comp.pdf",width=10.5,height=7)
+#ggsave("total_comp.png",width=10.5,height=7)
+
 ```
 
 # Rel. abun. box plots - mosquitoes
@@ -850,10 +881,14 @@ ggplot(data = melt.trim.mq.rel.wolb, aes(x = sex, y = Abundance))+
 
 melt.trim.mq.rel.1.4 <- subset(melt.trim.mq.rel, OTU %in% c("Otu0001", "Otu0004"))
 
+melt.trim.mq.rel.1.4$Longer_name <- melt.trim.mq.rel.1.4$OTU
+melt.trim.mq.rel.1.4$Longer_name <- sub("Otu0001","Otu0001_wAlbB",melt.trim.mq.rel.1.4$Longer_name)
+melt.trim.mq.rel.1.4$Longer_name <- sub("Otu0004","Otu0004_wAlbA",melt.trim.mq.rel.1.4$Longer_name)
+
 gg.sex.wolb <- ggplot(data = melt.trim.mq.rel.1.4, aes(x = sex, y = Abundance))+
   geom_jitter(width=0.2,alpha=0.5)+
   geom_boxplot(outlier.shape = NA,alpha=0.5)+
-  facet_wrap(~longer_name,scales="free")+
+  facet_wrap(~Longer_name,scales="free")+
   xlab("Mosquito sex")+
   ylab("Relative abundance/sample")+
   theme_bw()+
@@ -861,7 +896,8 @@ gg.sex.wolb <- ggplot(data = melt.trim.mq.rel.1.4, aes(x = sex, y = Abundance))+
   guides(color="none")
 gg.sex.wolb
 
-#ggsave("relabun.wolb.pdf",width=4,height=3)
+# ggsave("relabun.wolb.pdf",width=4,height=3)
+# ggsave("relabun.wolb.png",width=4,height=3)
 ```
 
 ## Chry & pseu in infusion
@@ -872,7 +908,7 @@ melt.trim.mq.rel.5.10 <- subset(melt.trim.mq.rel, OTU %in% c("Otu0005", "Otu0010
 gg.inf <- ggplot(data = melt.trim.mq.rel.5.10, aes(x = infusion, y = Abundance))+
   geom_jitter(width=0.2,alpha=0.5)+
   geom_boxplot(outlier.shape = NA,alpha=0.5)+
-  facet_wrap(~longer_name,scales="free")+
+  facet_wrap(~Longer_name,scales="free")+
   ylab("Relative abundance/sample")+
   xlab("Infusion")+
   scale_x_discrete(labels=c("OL","SG","PW"))+
@@ -891,7 +927,7 @@ melt.trim.mq.rel.kleb <- subset(melt.trim.mq.rel, OTU %in% c("Otu0009","Otu0022"
 gg.tem <- ggplot(data = melt.trim.mq.rel.kleb, aes(x = temperature, y = Abundance))+
   geom_jitter(width=0.2,alpha=0.5)+
   geom_boxplot(outlier.shape = NA,alpha=0.5)+
-  facet_wrap(~longer_name,scales="free")+
+  facet_wrap(~Longer_name,scales="free")+
   ylab("Relative abundance/sample")+
   theme_bw()+
   xlab("Temperature")+
@@ -926,13 +962,13 @@ melt.trim.mw.inf <- subset(melt.trim.mw.rel, OTU %in% c("Otu0003","Otu0005","Otu
 
 ggplot(data = melt.trim.mw.inf, aes(x = infusion, y = Abundance))+
   geom_boxplot(outlier.shape = NA)+
-  geom_jitter(aes(color = longer_name), height = 0, width = .2) +
-  facet_wrap(~longer_name,scales="free")
+  geom_jitter(aes(color = Longer_name), height = 0, width = .2) +
+  facet_wrap(~Longer_name,scales="free")
 
 gg.mw.inf <- ggplot(data = melt.trim.mw.inf, aes(x = infusion, y = Abundance))+
   geom_jitter(width=0.2,alpha=0.5)+
   geom_boxplot(outlier.shape = NA,alpha=0.5)+
-  facet_wrap(~longer_name,scales="free")+
+  facet_wrap(~Longer_name,scales="free")+
   xlab("Infusion")+
   ylab("Relative abundance/sample")+
   theme_bw()+
@@ -941,4 +977,10 @@ gg.mw.inf <- ggplot(data = melt.trim.mw.inf, aes(x = infusion, y = Abundance))+
 gg.mw.inf
 
 #ggsave("relabun.wolb.pdf",width=4,height=3)
+```
+
+# Session info
+
+```{r}
+sessionInfo()
 ```
