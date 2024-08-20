@@ -91,7 +91,7 @@ tree <- read.tree("phylotree_stock_otus100.nwk.txt")
 tree
 ```
 
-## Plotting
+## Plotting (Fig. S2)
 
 ```{r}
 ggtree(tree,layout="roundrect")+ #option for branch.length="none" which is cool
@@ -102,3 +102,8 @@ ggtree(tree,layout="roundrect")+ #option for branch.length="none" which is cool
 #ggsave("tree.all.pdf",height=8)
 ```
 
+# Session info
+
+```{r}
+sessionInfo()
+```
