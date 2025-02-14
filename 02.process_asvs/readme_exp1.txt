@@ -13,7 +13,7 @@ metadata_cleaned.csv
 mosquito_raw_reads.xlsx
 seqtable100_counts.csv = raw output from CMAIKI
 sequences_100_original.fasta = raw output from CMAIKI
-sequences_100.1-4 = cleaning up the fasta file
+sequences_100.1 through .4 = cleaning up the fasta file
 taxa_v138.1_boot60.rds = taxonomic assignment done on the cluster
 taxa_v138.1_boot60.csv = same file as before but reformatted with lots of info for phyloseq object
 taxa_v138.1_boot60_edits.csv = same file as above but added pool name columns for the taxa we intentionally introduced
