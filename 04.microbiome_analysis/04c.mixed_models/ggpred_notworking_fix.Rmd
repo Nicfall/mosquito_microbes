@@ -1,0 +1,414 @@
+---
+title: "mixmods_ggpred"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+# Ggpredict things
+
+## Setup
+
+```{r}
+#install.packages("ggeffects")
+library(ggeffects)
+library(cowplot)
+library(ggpubr)
+library(glmmTMB)
+
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04c.mixed_models")
+
+mwmod <- readRDS("water.model.rds")
+mosqmod <- readRDS("mosq.model.rds")
+```
+
+```{r}
+##mosquito model
+pred.mosq <- ggpredict(mosqmod, terms=c("variable", "infusion"), type="re")
+pred.mosq
+#write.csv(pred.mosq,file="ggpred.mosq.mosqmod.csv")
+
+##water model
+pred.mw <- ggpredict(mwmod, terms=c("variable", "infusion"), type="re", stringsAsFactors=TRUE)
+pred.mw
+#write.csv(pred.mw,file="ggpred.mw.mwmod.csv")
+
+pred.mosq$type <- "mosquito"
+pred.mw$type <- "water"
+pred.both <- data.frame(rbind(pred.mosq,pred.mw))
+
+##just rtp-i otus
+otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+otus.list <- c(otus.want$V1)
+
+pred.both.less <- pred.both[pred.both$x %in% otus.list,]
+
+#tax.all$Pool_name <- as.factor(tax.all$Pool_name)
+#these ones are unclear taxonomically: 
+#36, 38, 56, 70, 79, 80, 92, 205
+#these ones are wolbachia: 1, 4
+otus.no <- c("Otu0001","Otu0004","Otu0036","Otu0038","Otu0056","Otu0070","Otu0079","Otu0080","Otu0092","Otu0205","Otu0014","Otu0016","Otu0021","Otu0022","Otu0024","Otu0053","Otu0162")
+
+pred.both.lesser <- pred.both.less[!pred.both.less$x %in% otus.no,]
+
+##adding tax info
+tax.tab <- data.frame(ps.trim.mq@tax_table)
+
+pred.both.lesser$OTU <- pred.both.lesser$x
+#mosq.coef$OTU
+pred.both.less.tax <- plyr::join(pred.both.lesser,tax.tab)
+pred.both.less.tax.full <- pred.both.less.tax[complete.cases(pred.both.less.tax$Pool_name),]
+
+pred.both.less.tax.full$group <- sub("SW","PW",pred.both.less.tax.full$group)
+pred.both.less.tax.full$group <- factor(pred.both.less.tax.full$group,levels=c("OL","SG","PW"))
+
+gg.pred <- ggplot(pred.both.less.tax.full,aes(x=group,y=predicted,fill=type,shape=type))+
+  scale_shape_manual(values=c(21,23),name="Sample type",labels=c("Mosq.","Water"))+
+  geom_point(position=position_dodge(width=0.2),color="black")+
+  #geom_line(aes(group=type),linetype="dotted")+
+  #ylim(0,0.1)+
+  #theme(axis.text.x=element_text(angle=90))+
+  facet_wrap(~Pool_name,scales="free",nrow=1)+
+  scale_fill_manual(values=c("seashell3","lightsteelblue4"),name="Sample type",labels=c("Mosq.","Water"))+
+  theme_cowplot()+
+  ylab("Adj. prediction")+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1.1))+
+  xlab("Infusion")
+gg.pred
+
+#ggarrange(gg.relabun,gg.pred,nrow=2,heights=c(0.96,0.5),labels=c("(a)","(b)"))
+
+#ggsave(file="fig4_new.pdf",height=5.5,width=10)
+
+##switching vertical again
+gg.pred2 <- ggplot(pred.both.less.tax.full,aes(x=group,y=predicted,fill=type,shape=type))+
+  #scale_shape_manual(values=c(21,23),name="Type",labels=c("Mosq.","Water"))+
+  scale_shape_manual(values=c(6,10),name="Type",labels=c("Mosq.","Water"))+
+  geom_point(position=position_dodge(width=0.2),color="black",size=2)+
+  #geom_line(aes(group=type),linetype="dotted")+
+  #ylim(0,0.1)+
+  #theme(axis.text.x=element_text(angle=90))+
+  facet_wrap(~Pool_name,scales="free",ncol=3)+
+  scale_fill_manual(values=c("white","black"),name="Type",labels=c("Mosq.","Water"))+
+  #scale_fill_manual(values=c("seashell3","lightsteelblue4"),name="Type",labels=c("Mosq.","Water"))+
+  theme_cowplot()+
+  ylab("Adjusted predicted probability")+
+  #theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1.1))+
+  xlab("Infusion")
+gg.pred2
+
+#ggarrange(gg.relabun,gg.pred2,ncol=2,labels=c("(a)","(b)"))
+
+#ggsave("fig4_vertical.pdf",height=7,width=8)
+
+# ggplot(pred.both.less.tax.full,aes(x=group,y=predicted,fill=type,group=type))+
+#   #geom_point(position=position_dodge(width=0.1))+
+#   #ylim(0,0.1)+
+#   #theme(axis.text.x=element_text(angle=90))+
+#   facet_wrap(~Pool_name,scales="free")+
+#   theme_bw()+
+#   geom_bar(stat="identity",position=position_dodge())
+
+##just chry & pseu
+pred.both.chry <- subset(pred.both.less.tax.full,x=="Otu0005")
+pred.both.pseu <- subset(pred.both.less.tax.full,x=="Otu0010")
+
+gg.chry <- ggplot(pred.both.chry,aes(x=group,y=predicted,color=group,shape=type))+
+  geom_point()+
+  ggtitle("CHRY")+
+  theme_bw()
+gg.chry
+
+gg.pseu <- ggplot(pred.both.pseu,aes(x=group,y=predicted,color=group,shape=type))+
+  geom_point()+
+  ggtitle("PSEU")+
+  theme_bw()
+gg.pseu
+
+ggarrange(gg.chry,gg.pseu)
+```
+
+## Odds ratio calc
+
+Notes from Matt: 
+How do we calculate “X”?
+Predicted probability (PP) of CHRY in symbiosis in an SG environment is ~0.0014. The PP that is not CHRY in symbiosis in an SG environment is ~ (1- 0.0014).  The odds its CHRY in this condition is 0.0014/(1- 0.0014) or ~ 0.0014.
+
+Predicted probability (PP) of CHRY free-living in an SG environment is ~0.0004. The PP that is not CHRY free-living in an SG environment is ~ (1- 0.0004). The odds its CHRY in this condition is 0.0004/(1- 0.0004) or ~ 0.0004.
+
+The odds ratio of the odds of CHRY in symbiosis vs. free-living in SG environments is [0.0014/(1- 0.0014)]/[0.0004/(1- 0.0004)]=0.0014/0.0004= 3.5. So “the odds (or likelihood) of detecting CHRY with a single read in symbiosis within a SG mesocosm (vs. any other ASV in the dataset) was 3.5 times greater than in the free-living condition in the same SG mesocosm”. 
+
+```{r}
+pred.both[pred.both$x=="Otu0005",]
+1.416039e-03
+##Chry in symbiosis in SG: 0.001416039
+##PP of not chry is: 
+#1-0.001416039 #0.998584
+##odds it is chry is:
+0.001416039/(1-0.001416039) #0.001418047
+##Chry in water in SG: 0.0003293234
+0.0003293234/(1-0.0003293234) #0.0003294319
+##final odds ratio: [sym:water]
+0.001418047/0.0003294319 #4.304522
+
+pred.both[pred.both$x=="Otu0010",]
+
+##Pseu in symbiosis in PW: 0.0081115718
+##odds it is Pseu is:
+0.0081115718/(1-0.0081115718) #0.007858774
+##Pseu in water: 0.0035282076
+0.0035282076/(1-0.0035282076) #0.0035407
+##final odds ratio: [sym:water]
+0.008177907/0.0035407 #2.219554
+```
+
+# Plot coefficient things
+
+## Setup
+
+```{r}
+library(stringr)
+library("ggplot2")
+#install.packages("dplyr")
+library("dplyr")
+
+setwd("~/nicolagk@hawaii.edu - Google Drive/My Drive/Mosquito_business/mosquito_microbes/04.microbiome_analysis/04c.mixed_models/")
+
+mosq.coef1 <- read.csv("mosqmodranef_revising.csv")
+mosq.coef <- subset(mosq.coef1,grpvar=="variable:infusion")
+
+mw.coef1 <- read.csv("mwmodranef_revising.csv")
+mw.coef <- subset(mw.coef1,grpvar=="variable:infusion")
+```
+
+## Mosquitoes
+
+```{r}
+mosq.coef$infusion <- str_sub(mosq.coef$grp,9,10)
+mosq.coef$otu <- str_sub(mosq.coef$grp,1,7)
+
+ggplot(mosq.coef,aes(y=otu,x=condval,fill=condval))+
+  geom_bar(stat="identity",color="black")+
+  geom_errorbar(aes(xmin=condval+condsd,xmax=condval-condsd),width=0)+
+  facet_grid(~infusion)+
+  theme_bw()+
+  #theme(axis.text.x=element_text(angle=90))+
+  scale_fill_gradient2()
+
+##adding taxa info
+# ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.rds")
+# ps.clean
+ps.trim.mq <- readRDS("ps.trim.mq.rds")
+
+# Only keeping clear taxa
+tax.all <- data.frame(ps.trim.mq@tax_table)
+
+otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+otus.list <- c(otus.want$V1)
+
+tax.less <- tax.all[tax.all$OTU %in% otus.list,]
+
+#tax.all$Pool_name <- as.factor(tax.all$Pool_name)
+#these ones are unclear taxonomically: 
+#36, 38, 56, 70, 79, 80, 92, 205
+#these ones are wolbachia: 1, 4
+otus.no <- c("Otu0001","Otu0004","Otu0036","Otu0038","Otu0056","Otu0070","Otu0079","Otu0080","Otu0092","Otu0205")
+
+tax.lesser <- tax.less[!tax.less$OTU %in% otus.no,]
+
+ps.trim.mq@tax_table <- tax_table(as.matrix(tax.lesser))
+ps.trim.mq
+
+#ps.rtp <- prune_taxa(taxa_sums(ps.clean)>0,ps.clean)
+
+ps.rtp.mw.mq <- subset_samples(ps.trim.mq,type=="Microbial Water"|type=="A.albopictus")
+
+ps.rtp1 <- prune_taxa(taxa_sums(ps.rtp.mw.mq)>0,ps.rtp.mw.mq)
+
+ps.rtp <- prune_samples(sample_sums(ps.rtp1)>0,ps.rtp1)
+ps.rtp #10 taxa
+
+tax.tab <- data.frame(ps.rtp@tax_table)
+
+mosq.coef$OTU <- mosq.coef$otu
+mosq.coef$OTU
+tax.mq.coef <- plyr::join(mosq.coef,tax.tab)
+tax.mq.coef.full <- tax.mq.coef[complete.cases(tax.mq.coef$Pool_name),]
+
+tax.mq.coef.full$infusion <- sub("SW","PW",tax.mq.coef.full$infusion)
+tax.mq.coef.full$infusion <- factor(tax.mq.coef.full$infusion,levels=c("OL","SG","PW"))
+
+gg.mixmod <- ggplot(tax.mq.coef.full,aes(y=Pool_name,x=condval,fill=condval))+
+  geom_bar(stat="identity",color="black",width=0.75)+
+  geom_errorbar(aes(xmin=condval+condsd,xmax=condval-condsd),width=0)+
+  facet_grid(~infusion)+
+  theme_bw()+
+  #theme(axis.text.x=element_text(angle=90))+
+  scale_fill_gradient2()+
+  #theme(legend.position="none")+
+  scale_y_discrete(limits=rev)+
+  ylab("Culture name")+
+  xlab("Conditional mode (+/- sd)")+
+  theme(axis.text.y = element_text(face = c('plain', 'plain', 'bold', 'plain','plain','plain','plain','bold','plain','plain')),legend.position="none")
+gg.mixmod
+
+# tax.mq.coef.full.extra <- tax.mq.coef.full %>%
+#   add_row(infusion="OL",condval=NA,Pool_name="ASAI1/2") %>%
+#   add_row(infusion="PW",condval=NA,Pool_name="ASAI1/2") %>%
+#   add_row(infusion="SG",condval=NA,Pool_name="ASAI1/2")
+# 
+# ggplot(tax.mq.coef.full.extra,aes(y=condval,x=Pool_name,fill=condval,na.rm=FALSE))+
+#   geom_bar(stat="identity",color="black",width=0.75)+
+#   geom_errorbar(aes(ymin=condval+condsd,ymax=condval-condsd),width=0)+
+#   facet_grid(infusion~.)+
+#   theme_bw()+
+#   #theme(axis.text.x=element_text(angle=90))+
+#   scale_fill_gradient2()+
+#   scale_y_continuous(na.value = NA)
+
+  #theme(legend.position="none")+
+  #scale_y_discrete(limits=rev)+
+  #ylab("Culture name")+
+  #xlab("Conditional mode (+/- sd)")+
+  #theme(axis.text.y = element_text(face = c('plain', 'plain', 'bold', 'plain','plain','plain','plain','bold','plain','plain')),legend.position="none")
+```
+
+## Water
+
+```{r}
+mw.coef$infusion <- str_sub(mw.coef$grp,9,10)
+mw.coef$otu <- str_sub(mw.coef$grp,1,7)
+
+ggplot(mw.coef,aes(y=otu,x=condval,fill=condval))+
+  geom_bar(stat="identity",color="black")+
+  geom_errorbar(aes(xmin=condval+condsd,xmax=condval-condsd),width=0)+
+  facet_grid(~infusion)+
+  theme_bw()+
+  #theme(axis.text.x=element_text(angle=90))+
+  scale_fill_gradient2()
+
+##adding taxa info
+# ps.clean <- readRDS("../../02.process_asvs/ps.clean.trim.rds")
+# ps.clean
+ps.trim.mw <- readRDS("ps.trim.mw.rds")
+
+# Only keeping clear taxa
+tax.all <- data.frame(ps.trim.mw@tax_table)
+
+otus.want <- read.table("../../03.stock_culture_taxonomy/otus100.txt")
+otus.list <- c(otus.want$V1)
+
+tax.less <- tax.all[tax.all$OTU %in% otus.list,]
+
+#tax.all$Pool_name <- as.factor(tax.all$Pool_name)
+#these ones are unclear taxonomically: 
+#36, 38, 56, 70, 79, 80, 92, 205
+#these ones are wolbachia: 1, 4
+otus.no <- c("Otu0001","Otu0004","Otu0036","Otu0038","Otu0056","Otu0070","Otu0079","Otu0080","Otu0092","Otu0205")
+
+tax.lesser <- tax.less[!tax.less$OTU %in% otus.no,]
+
+ps.trim.mw@tax_table <- tax_table(as.matrix(tax.lesser))
+ps.trim.mw
+
+#ps.rtp <- prune_taxa(taxa_sums(ps.clean)>0,ps.clean)
+
+ps.rtp.mw.mq <- subset_samples(ps.trim.mq,type=="Microbial Water"|type=="A.albopictus")
+
+ps.rtp1 <- prune_taxa(taxa_sums(ps.rtp.mw.mq)>0,ps.rtp.mw.mq)
+
+ps.rtp <- prune_samples(sample_sums(ps.rtp1)>0,ps.rtp1)
+ps.rtp #15 taxa for water, 10 for mosqs
+
+tax.tab <- data.frame(ps.rtp@tax_table)
+
+mw.coef$OTU <- mw.coef$otu
+mw.coef$OTU
+tax.mw.coef <- plyr::join(mw.coef,tax.tab)
+tax.mw.coef.full <- tax.mw.coef[complete.cases(tax.mw.coef$Pool_name),]
+
+tax.mw.coef.full$infusion <- sub("SW","PW",tax.mw.coef.full$infusion)
+tax.mw.coef.full$infusion <- factor(tax.mw.coef.full$infusion,levels=c("OL","SG","PW"))
+
+gg.mixmod <- ggplot(tax.mw.coef.full,aes(y=Pool_name,x=condval,fill=condval))+
+  geom_bar(stat="identity",color="black",width=0.75)+
+  geom_errorbar(aes(xmin=condval+condsd,xmax=condval-condsd),width=0)+
+  facet_grid(~infusion)+
+  theme_bw()+
+  #theme(axis.text.x=element_text(angle=90))+
+  scale_fill_gradient2()+
+  #theme(legend.position="none")+
+  scale_y_discrete(limits=rev)+
+  ylab("Culture name")+
+  xlab("Conditional mode (+/- sd)")+
+  theme(axis.text.y = element_text(face = c('plain', 'plain', 'bold', 'plain','plain','plain','plain','bold','plain','plain')),legend.position="none")
+gg.mixmod
+```
+
+## Plotting both mq & mw
+
+```{r}
+tax.mw.coef.full$type <- "Water"
+tax.mq.coef.full$type <- "Mosquitoes"
+
+#mosq one has an extra column
+# tax.mq.coef.full <- tax.mq.coef.full %>%
+#   select(-abs_condval)
+  
+#colnames(tax.mq.coef.full)
+#colnames(tax.mw.coef.full)
+
+tax.coef.both <- rbind(tax.mw.coef.full,tax.mq.coef.full)
+
+ggplot(tax.coef.both,aes(x=Pool_name,y=condval,fill=condval))+
+  geom_bar(stat="identity",color="black",width=0.75,position=position_dodge())+
+  geom_errorbar(aes(ymin=condval+condsd,ymax=condval-condsd),width=0)+
+  facet_grid(~infusion)+
+  theme_bw()+
+  #theme(axis.text.x=element_text(angle=90))+
+  scale_fill_gradient2()+
+  #theme(legend.position="none")+
+  #scale_y_discrete(limits=rev)+
+  ylab("Culture name")+
+  xlab("Conditional mode (+/- sd)")
+  #theme(axis.text.y = element_text(face = c('plain', 'plain', 'bold', 'plain','plain','plain','plain','bold','plain','plain')),legend.position="none")
+
+#no carn in the water
+tax.coef.both2 <- subset(tax.coef.both,Pool_name!="CARN1")
+
+ggplot(tax.coef.both2,aes(y=Pool_name,x=condval,group=type,fill=type))+
+  #geom_bar(stat="identity",color="black",width=0.75,position=position_dodge())+
+  geom_bar(stat="identity",position=position_dodge(0.9),color="black")+
+  geom_errorbar(aes(xmin=condval+condsd,xmax=condval-condsd),position=position_dodge(1),width=0.1)+
+  facet_grid(~infusion)+
+  scale_fill_manual(values=c("lightgrey","darkgray"))+
+  #scale_fill_gradient2()+
+  theme_bw()
+```
+
+## Conditional mode correlation
+
+```{r}
+#install.packages("ggrepel")
+library("ggrepel")
+#install.packages("cowplot")
+library("cowplot")
+
+tax.both.xy <- merge(tax.mq.coef.full,tax.mw.coef.full,by="grp")
+tax.both.xy$infusion.x==tax.both.xy$infusion.y
+
+ggplot(tax.both.xy,aes(x=condval.y,y=condval.x,color=infusion.x,label=Pool_name.x))+
+  geom_hline(yintercept=0,linetype="dotted",color="darkgrey")+
+  geom_vline(xintercept=0,linetype="dotted",color="darkgrey")+
+  xlab("Conditional mode in mesocosm water")+
+  ylab("Conditional mode in mosquitoes")+
+  #geom_abline(slope=1, intercept = 0,linetype="dashed",color="darkgrey")+
+  geom_smooth(method = "lm", se = F,col = "grey40",linetype="dashed",linewidth=0.75)+
+  geom_text_repel(color="black")+
+  geom_point()+
+  scale_color_manual(values=c("#7DBA54","#992559","#60eede"),name="Infusion")+
+  theme_cowplot()
+
+#ggsave(file="mq.mw.mod.regression.pdf",width=5,height=5)
+#ggsave(file="mq.mw.mod.regression.png",width=5,height=5)
+
+```
