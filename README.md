@@ -14,7 +14,7 @@ This study examined how abiotic larval habitat conditions (botanical detritus ty
 
 ## Bioinformatics & Analysis
 
-- Raw reads processed with [MetaFlow|mics](https://github.com/metagenlab/MF-mics)
+- Raw reads (16S rRNA gene amplicons) processed with MetaFlow|mics
 - Taxonomy assigned against SILVA v138.1
 - Downstream R analyses use `phyloseq`, `glmmTMB`, `coxme`, and `ggeffects`
 
